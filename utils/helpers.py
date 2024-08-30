@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
+from models import resnet18, resnet34, resnet50, mobilenet_v2
 from utils.datasets import AFLW, AFLW2000, AFW, BIWI, Pose300W
 
 
@@ -282,3 +283,18 @@ def get_dataset(params, train=True):
         num_workers=params.num_workers
     )
     return pose_dataset, data_loader
+
+
+def get_model(arch, num_classes=6, pretrained=True):
+    """Return the model based on the specified architecture."""
+    if arch == 'resnet18':
+        model = resnet18(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet34':
+        model = resnet34(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet50':
+        model = resnet50(pretrained=pretrained, num_classes=num_classes)
+    elif arch == "mobilenetv2":
+        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
+    else:
+        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
+    return model

@@ -1,9 +1,9 @@
 import os
-
-import numpy as np
 import cv2
-import pandas as pd
+import random
+import numpy as np
 from PIL import Image, ImageFilter
+
 
 import torch
 from torch.utils.data.dataset import Dataset
@@ -13,16 +13,79 @@ from torchvision import transforms
 from scipy import io
 from utils import helpers
 
-import random
+
+def load_filenames(root_dir):
+    filenames = []
+    removed_count = 0
+
+    for root, dirs, files in os.walk(root_dir):
+        for file in files:
+            if file.endswith('.jpg'):
+                mat_path = os.path.join(root, file.replace('.jpg', '.mat'))
+                label = io.loadmat(mat_path)
+                pitch, yaw, roll = label['Pose_Para'][0][:3]
+
+                # Convert radians to degrees
+                pitch *= 180 / np.pi
+                yaw *= 180 / np.pi
+                roll *= 180 / np.pi
+
+                # Only add the file if the conditions are met
+                if abs(pitch) <= 99 and abs(yaw) <= 99 and abs(roll) <= 99:
+                    filenames.append(os.path.join(root, file[:-4]))
+                else:
+                    removed_count += 1
+
+    return filenames, removed_count
 
 
-def get_list_from_filenames(file_path):
-    # input:    relative path to .txt file with file names
-    # output:   list of relative path names
-    print(file_path)
-    with open(file_path) as f:
-        lines = f.read().splitlines()
-    return lines
+class Pose300W(Dataset):
+    def __init__(self, root, transform):
+        self.root = root
+        self.transform = transform
+        self.filenames, removed_items = load_filenames(root)
+        print(f"{removed_items} items removed from dataset that have an angle > 99 degrees. Loaded {len(self)} files.")
+
+    def __getitem__(self, idx):
+        filename = self.filenames[idx]
+        img_path = f"{filename}.jpg"
+        mat_path = f"{filename}.mat"
+
+        image = Image.open(img_path).convert("RGB")
+        lbl = io.loadmat(mat_path)
+        pt2d = lbl['pt2d']
+        pitch, yaw, roll = lbl['Pose_Para'][0][:3]
+
+        x_min, x_max = np.min(pt2d[0, :]), np.max(pt2d[0, :])
+        y_min, y_max = np.min(pt2d[1, :]), np.max(pt2d[1, :])
+
+        # k calculation and crop adjustments
+        k = random.uniform(0.2, 0.4)
+        dx = 0.6 * k * (x_max - x_min)
+        dy = 0.6 * k * (y_max - y_min)
+        x_min, x_max = x_min - dx, x_max + dx
+        y_min, y_max = y_min - 2 * dy, y_max + dy
+
+        x_min, y_min, x_max, y_max = map(int, (x_min, y_min, x_max, y_max))
+        image = image.crop((x_min, y_min, x_max, y_max))
+
+        if random.random() < 0.5:
+            yaw, roll = -yaw, -roll
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+
+        if random.random() < 0.05:
+            image = image.filter(ImageFilter.BLUR)
+
+        rotation_matrix = helpers.get_rotation_matrix(pitch, yaw, roll)
+        rotation_matrix = torch.tensor(rotation_matrix, dtype=torch.float32)
+
+        if self.transform is not None:
+            image = self.transform(image)
+
+        return image, rotation_matrix, filename
+
+    def __len__(self):
+        return len(self.filenames)
 
 
 class AFLW2000(Dataset):
@@ -70,7 +133,7 @@ class AFLW2000(Dataset):
 
 
 class AFLW(Dataset):
-    def __init__(self, data_dir, filename_path, transform, img_ext='.jpg', annot_ext='.txt', image_mode='RGB'):
+    def __init__(self, data_dir, filename_path, transform, img_ext='.jpg', annot_ext='.txt'):
         self.data_dir = data_dir
         self.transform = transform
         self.img_ext = img_ext
@@ -84,8 +147,7 @@ class AFLW(Dataset):
         self.length = len(filename_list)
 
     def __getitem__(self, index):
-        img = Image.open(os.path.join(self.data_dir, self.X_train[index] + self.img_ext))
-        img = img.convert(self.image_mode)
+        img = Image.open(os.path.join(self.data_dir, self.X_train[index] + self.img_ext)).convert('RGB')
         txt_path = os.path.join(self.data_dir, self.y_train[index] + self.annot_ext)
 
         # We get the pose in radians
@@ -221,77 +283,3 @@ class BIWI(Dataset):
     def __len__(self):
         # 15,667
         return self.length
-
-
-def load_filenames(root_dir):
-    filenames = []
-    removed_count = 0
-
-    for root, dirs, files in os.walk(root_dir):
-        for file in files:
-            if file.endswith('.jpg'):
-                mat_path = os.path.join(root, file.replace('.jpg', '.mat'))
-                label = io.loadmat(mat_path)
-                pitch, yaw, roll = label['Pose_Para'][0][:3]
-
-                # Convert radians to degrees
-                pitch *= 180 / np.pi
-                yaw *= 180 / np.pi
-                roll *= 180 / np.pi
-
-                # Only add the file if the conditions are met
-                if abs(pitch) <= 99 and abs(yaw) <= 99 and abs(roll) <= 99:
-                    filenames.append(os.path.join(root, file[:-4]))
-                else:
-                    removed_count += 1
-
-    return filenames, removed_count
-
-
-class Pose300W(Dataset):
-    def __init__(self, root, transform):
-        self.root = root
-        self.transform = transform
-        self.filenames, removed_items = load_filenames(root)
-        print(f"{removed_items} items removed from dataset that have an angle > 99 degrees. Loaded {len(self)} files.")
-
-    def __getitem__(self, idx):
-        filename = self.filenames[idx]
-        img_path = f"{filename}.jpg"
-        mat_path = f"{filename}.mat"
-
-        image = Image.open(img_path).convert("RGB")
-        lbl = io.loadmat(mat_path)
-        pt2d = lbl['pt2d']
-        pitch, yaw, roll = lbl['Pose_Para'][0][:3]
-
-        x_min, x_max = np.min(pt2d[0, :]), np.max(pt2d[0, :])
-        y_min, y_max = np.min(pt2d[1, :]), np.max(pt2d[1, :])
-
-        # k calculation and crop adjustments
-        k = random.uniform(0.2, 0.4)
-        dx = 0.6 * k * (x_max - x_min)
-        dy = 0.6 * k * (y_max - y_min)
-        x_min, x_max = x_min - dx, x_max + dx
-        y_min, y_max = y_min - 2 * dy, y_max + dy
-
-        x_min, y_min, x_max, y_max = map(int, (x_min, y_min, x_max, y_max))
-        image = image.crop((x_min, y_min, x_max, y_max))
-
-        if random.random() < 0.5:
-            yaw, roll = -yaw, -roll
-            image = image.transpose(Image.FLIP_LEFT_RIGHT)
-
-        if random.random() < 0.05:
-            image = image.filter(ImageFilter.BLUR)
-
-        rotation_matrix = helpers.get_rotation_matrix(pitch, yaw, roll)
-        rotation_matrix = torch.tensor(rotation_matrix, dtype=torch.float32)
-
-        if self.transform is not None:
-            image = self.transform(image)
-
-        return image, rotation_matrix, filename
-
-    def __len__(self):
-        return len(self.filenames)

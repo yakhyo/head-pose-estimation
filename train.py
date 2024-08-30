@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 import argparse
 
 import numpy as np
@@ -7,18 +8,30 @@ from PIL import Image
 
 import torch
 
-from models import resnet
 from utils.loss import GeodesicLoss
-from utils.helpers import get_dataset
+from utils.helpers import get_dataset, get_model
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 
 def parse_args():
-    """Parse input arguments."""
-    parser = argparse.ArgumentParser(description='Head pose estimation using the 6DRepNet.')
+    """head pose estimation training arguments"""
+    parser = argparse.ArgumentParser(description='Head pose estimation training.')
+
+    # Dataset and data paths
+    parser.add_argument('--data', type=str, default='data/300W_LP', help='Directory path for data.')
+    parser.add_argument('--dataset', type=str, default='300W', help='Dataset name.')
 
     # Model and training configuration
-    parser.add_argument('--num-epochs', type=int, default=80, help='Maximum number of training epochs.')
-    parser.add_argument('--batch-size', type=int, default=80, help='Batch size.')
+    parser.add_argument('--num-epochs', type=int, default=100, help='Maximum number of training epochs.')
+    parser.add_argument('--batch-size', type=int, default=128, help='Batch size.')
+    parser.add_argument(
+        "--arch",
+        type=str,
+        default="resnet18",
+        help="Network architecture, currently available: resnet18/34/50, mobilenetv2"
+    )
     parser.add_argument('--lr', type=float, default=0.0001, help='Base learning rate.')
     parser.add_argument("--num-workers", type=int, default=8, help="Number of workers for data loading.")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint to continue training.")
@@ -46,10 +59,6 @@ def parse_args():
         help='List of epoch indices to reduce learning rate for MultiStepLR (ignored if StepLR is used).'
     )
 
-    # Dataset and data paths
-    parser.add_argument('--data', type=str, default='data/300W_LP', help='Directory path for data.')
-    parser.add_argument('--dataset', type=str, default='300W', help='Dataset name.')
-
     # Output path
     parser.add_argument('--output', type=str, default='', help='Path of model output.')
 
@@ -66,6 +75,7 @@ def train_one_epoch(
     epoch,
     scheduler=None
 ):
+    model.train()
     loss_sum = 0.0
     for idx, (images, labels, _) in enumerate(data_loader):
         images = images.to(device)
@@ -89,14 +99,14 @@ def train_one_epoch(
                 f'Iter [{idx + 1}/{len(data_loader.dataset) // params.batch_size}] '
                 f'Loss: {loss.item():.6f}'
             )
-            print(log_message)
+            logging.info(log_message)
 
     if scheduler is not None:
         scheduler.step()
 
     avg_train_loss = loss_sum / len(data_loader)
     log_message = f'Epoch [{epoch + 1}/{params.num_epochs}], Average Training Loss: {avg_train_loss:.6f}'
-    print(log_message)
+    logging.info(log_message)
 
     return avg_train_loss
 
@@ -112,7 +122,7 @@ def main(params):
     if not os.path.exists(f'output/{summary_name}'):
         os.makedirs(f'output/{summary_name}')
 
-    model = resnet.resnet18(num_classes=6)
+    model = get_model(params.arch, num_classes=6)
     model.to(device)
 
     criterion = GeodesicLoss()
@@ -132,9 +142,9 @@ def main(params):
                     state[k] = v.to(device)
 
         start_epoch = ckpt['epoch']
-        print(f'Resumed training from {params.checkpoint}, starting at epoch {start_epoch + 1}')
+        logging.info(f'Resumed training from {params.checkpoint}, starting at epoch {start_epoch + 1}')
 
-    print('Loading data.')
+    logging.info('Loading training data.')
     train_dataset, train_loader = get_dataset(params)
 
     if params.scheduler == 'MultiStepLR':
@@ -146,7 +156,7 @@ def main(params):
 
     best_train_loss = float('inf')
 
-    print('Starting training.')
+    logging.info('Starting training.')
 
     for epoch in range(start_epoch, params.num_epochs):
         avg_train_loss = train_one_epoch(
@@ -173,7 +183,7 @@ def main(params):
             best_train_loss = avg_train_loss
             torch.save(model.state_dict(), os.path.join('output', summary_name, 'best_model.pt'))
 
-    print('Training completed.')
+    logging.info('Training completed.')
 
 
 if __name__ == '__main__':

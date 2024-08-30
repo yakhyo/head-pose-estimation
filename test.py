@@ -1,12 +1,16 @@
 import os
-import argparse
-import torch
-import numpy as np
 import cv2
+import logging
+import argparse
+import numpy as np
 
-from models import resnet
+import torch
+
 from utils import datasets, helpers
-from utils.helpers import get_dataset
+from utils.helpers import get_dataset, get_model
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 
 def parse_args():
@@ -16,6 +20,12 @@ def parse_args():
     # Dataset and data paths
     parser.add_argument('--data', type=str, default='data/AFLW2000', help='Directory path for data.')
     parser.add_argument('--dataset', type=str, default='AFLW2000', help='Dataset type.')
+    parser.add_argument(
+        "--arch",
+        type=str,
+        default="resnet18",
+        help="Network architecture, currently available: resnet18/34/50, mobilenetv2"
+    )
 
     # Data loading params
     parser.add_argument("--num-workers", type=int, default=8, help="Number of workers for data loading.")
@@ -83,10 +93,10 @@ def evaluate(
             torch.abs(r_pred_deg - 180 - r_gt_deg)
         ]), dim=0)[0])
 
-    print(
-        f'Yaw: {yaw_error / total:.4f} ',
-        f'Pitch: {pitch_error / total:.4f} ',
-        f'Roll: {roll_error / total:.4f} ',
+    logging.info(
+        f'Yaw: {yaw_error / total:.4f} '
+        f'Pitch: {pitch_error / total:.4f} '
+        f'Roll: {roll_error / total:.4f} '
         f'MAE: {(yaw_error + pitch_error + roll_error) / (total * 3):.4f}'
     )
 
@@ -94,16 +104,16 @@ def evaluate(
 def main(params):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    print('Loading test data.')
+    logging.info('Loading test data.')
     test_dataset, test_loader = get_dataset(params, train=False)
 
-    model = resnet.resnet18(num_classes=6)
+    model = get_model(params.arch, num_classes=6, pretrained=False)
     if os.path.exists(params.weights):
         model.load_state_dict(torch.load(params.weights, map_location=device, weights_only=True))
     else:
         raise ValueError(f"Model weight not found at {params.weights}")
     model.to(device)
-    evaluate(params=params, model=model, data_loader=test_loader, device=devi)
+    evaluate(params=params, model=model, data_loader=test_loader, device=device)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,4 @@
 import os
-import csv
 import time
 import argparse
 
@@ -10,7 +9,6 @@ import torch
 
 from models import resnet
 from utils.loss import GeodesicLoss
-from utils import datasets
 from utils.helpers import get_dataset
 
 
@@ -23,6 +21,7 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=80, help='Batch size.')
     parser.add_argument('--lr', type=float, default=0.0001, help='Base learning rate.')
     parser.add_argument("--num-workers", type=int, default=8, help="Number of workers for data loading.")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint to continue training.")
 
     # Scheduler configuration
     parser.add_argument(
@@ -68,9 +67,7 @@ def train_one_epoch(
     scheduler=None
 ):
     loss_sum = 0.0
-    iter = 0
     for idx, (images, labels, _) in enumerate(data_loader):
-        iter += 1
         images = images.to(device)
         labels = labels.to(device)
 
@@ -121,9 +118,21 @@ def main(params):
     criterion = GeodesicLoss()
     optimizer = torch.optim.Adam(model.parameters(), params.lr)
 
-    if not params.output == '':
-        saved_state_dict = torch.load(params.output)
-        model.load_state_dict(saved_state_dict['model_state_dict'])
+    start_epoch = 0
+    if params.checkpoint and os.path.isfile(params.checkpoint):
+        ckpt = torch.load(params.checkpoint, map_location=device, weights_only=True)
+
+        model.load_state_dict(ckpt['model_state_dict'])
+        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+
+        # Move optimizer states to device
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(device)
+
+        start_epoch = ckpt['epoch']
+        print(f'Resumed training from {params.checkpoint}, starting at epoch {start_epoch + 1}')
 
     print('Loading data.')
     train_dataset, train_loader = get_dataset(params)
@@ -139,7 +148,7 @@ def main(params):
 
     print('Starting training.')
 
-    for epoch in range(params.num_epochs):
+    for epoch in range(start_epoch, params.num_epochs):
         avg_train_loss = train_one_epoch(
             params=params,
             model=model,

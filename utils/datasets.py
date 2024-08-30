@@ -248,7 +248,7 @@ def load_filenames(root_dir):
     return filenames, removed_count
 
 
-class Pose_300W_LP(Dataset):
+class Pose300W(Dataset):
     def __init__(self, root, transform):
         self.root = root
         self.transform = transform
@@ -295,20 +295,3 @@ class Pose_300W_LP(Dataset):
 
     def __len__(self):
         return len(self.filenames)
-
-
-def getDataset(dataset, data_dir, transformations, train_mode=True):
-    if dataset == 'Pose_300W_LP':
-        pose_dataset = Pose_300W_LP(data_dir, transformations)
-    elif dataset == 'AFLW2000':
-        pose_dataset = AFLW2000(data_dir, transformations)
-    elif dataset == 'BIWI':
-        pose_dataset = BIWI(data_dir,  transformations, train_mode=train_mode)
-    elif dataset == 'AFLW':
-        pose_dataset = AFLW(data_dir,  transformations)
-    elif dataset == 'AFW':
-        pose_dataset = AFW(data_dir,  transformations)
-    else:
-        raise NameError('Error: not a valid dataset name')
-
-    return pose_dataset

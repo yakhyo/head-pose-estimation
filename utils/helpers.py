@@ -8,6 +8,13 @@ import scipy.io as sio
 import cv2
 
 
+import torch
+from torch.utils.data import DataLoader
+from torchvision import transforms
+
+from utils.datasets import AFLW, AFLW2000, AFW, BIWI, Pose300W
+
+
 def plot_pose_cube(img, yaw, pitch, roll, tdx=None, tdy=None, size=150):
     """
     Plots a 3D pose cube on a given image based on yaw, pitch, and roll angles.
@@ -237,3 +244,41 @@ def get_rotation_matrix(x, y, z):
 
     R = Rz.dot(Ry.dot(Rx))
     return R
+
+
+def get_dataset(params, train=True):
+
+    if train:
+        transform = transforms.Compose([
+            transforms.RandomResizedCrop(size=224, scale=(0.8, 1)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    if params.dataset == '300W':
+        pose_dataset = Pose300W(params.data, transform)
+    elif params.dataset == 'AFLW2000':
+        pose_dataset = AFLW2000(params.data, transform)
+    elif params.dataset == 'BIWI':
+        pose_dataset = BIWI(params.data,  transform, train_mode=train)
+    elif params.dataset == 'AFLW':
+        pose_dataset = AFLW(params.data,  transform)
+    elif params.dataset == 'AFW':
+        pose_dataset = AFW(params.data,  transform)
+    else:
+        raise NameError('Error: not a valid dataset name')
+
+    data_loader = torch.utils.data.DataLoader(
+        dataset=pose_dataset,
+        batch_size=params.batch_size,
+        shuffle=True if train else False,
+        num_workers=params.num_workers
+    )
+    return pose_dataset, data_loader

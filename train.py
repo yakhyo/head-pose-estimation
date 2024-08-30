@@ -1,19 +1,17 @@
-
-import time
 import os
+import csv
+import time
 import argparse
 
 import numpy as np
 from PIL import Image
 
 import torch
-from torch.utils.data import DataLoader
-from torchvision import transforms
-
 
 from models import resnet
 from utils.loss import GeodesicLoss
 from utils import datasets
+from utils.helpers import get_dataset
 
 
 def parse_args():
@@ -51,7 +49,7 @@ def parse_args():
 
     # Dataset and data paths
     parser.add_argument('--data', type=str, default='data/300W_LP', help='Directory path for data.')
-    parser.add_argument('--dataset', type=str, default='Pose_300W_LP', help='Dataset type.')
+    parser.add_argument('--dataset', type=str, default='300W', help='Dataset name.')
 
     # Output path
     parser.add_argument('--output', type=str, default='', help='Path of model output.')
@@ -66,98 +64,100 @@ def train_one_epoch(
     optimizer,
     data_loader,
     device,
-    epoch
-) -> None:
-    pass
+    epoch,
+    scheduler=None
+):
+    loss_sum = 0.0
+    iter = 0
+    for idx, (images, labels, _) in enumerate(data_loader):
+        iter += 1
+        images = images.to(device)
+        labels = labels.to(device)
+
+        # Forward pass
+        outputs = model(images)
+
+        # Calculate loss
+        loss = criterion(labels, outputs)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        loss_sum += loss.item()
+
+        if (idx + 1) % 100 == 0:
+            log_message = (
+                f'Epoch [{epoch + 1}/{params.num_epochs}], '
+                f'Iter [{idx + 1}/{len(data_loader.dataset) // params.batch_size}] '
+                f'Loss: {loss.item():.6f}'
+            )
+            print(log_message)
+
+    if scheduler is not None:
+        scheduler.step()
+
+    avg_train_loss = loss_sum / len(data_loader)
+    log_message = f'Epoch [{epoch + 1}/{params.num_epochs}], Average Training Loss: {avg_train_loss:.6f}'
+    print(log_message)
+
+    return avg_train_loss
 
 
-if __name__ == '__main__':
-    args = parse_args()
-
+def main(params):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if not os.path.exists('output'):
         os.makedirs('output')
 
-    summary_name = '{}_{}'.format('resnet18', int(time.time()), args.batch_size)
+    summary_name = '{}_{}'.format('resnet18', int(time.time()), params.batch_size)
 
-    if not os.path.exists('output/{}'.format(summary_name)):
-        os.makedirs('output/{}'.format(summary_name))
+    if not os.path.exists(f'output/{summary_name}'):
+        os.makedirs(f'output/{summary_name}')
 
     model = resnet.resnet18(num_classes=6)
+    model.to(device)
 
-    if not args.output == '':
-        saved_state_dict = torch.load(args.output)
+    criterion = GeodesicLoss()
+    optimizer = torch.optim.Adam(model.parameters(), params.lr)
+
+    if not params.output == '':
+        saved_state_dict = torch.load(params.output)
         model.load_state_dict(saved_state_dict['model_state_dict'])
 
     print('Loading data.')
+    train_dataset, train_loader = get_dataset(params)
 
-    transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=224, scale=(0.8, 1)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-
-    pose_dataset = datasets.getDataset(args.dataset, args.data, transform)
-
-    train_loader = torch.utils.data.DataLoader(
-        dataset=pose_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers
-    )
-
-    model.to(device)
-    criterion = GeodesicLoss()
-    optimizer = torch.optim.Adam(model.parameters(), args.lr)
-
-    if args.scheduler == 'MultiStepLR':
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
-    elif args.scheduler == 'StepLR':
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    if params.scheduler == 'MultiStepLR':
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=params.milestones, gamma=params.gamma)
+    elif params.scheduler == 'StepLR':
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=params.step_size, gamma=params.gamma)
     else:
         scheduler = None
 
     best_train_loss = float('inf')
 
     print('Starting training.')
-    for epoch in range(args.num_epochs):
-        loss_sum = 0.0
-        iter = 0
-        for i, (images, labels, _) in enumerate(train_loader):
-            iter += 1
-            images = images.to(device)
-            labels = labels.to(device)
 
-            # Forward pass
-            outputs = model(images)
-
-            # Calc loss
-            loss = criterion(labels, outputs)
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            loss_sum += loss.item()
-
-            if (i+1) % 100 == 0:
-                print('Epoch [%d/%d], Iter [%d/%d] Loss: %.6f' %
-                      (epoch+1, args.num_epochs, i+1, len(pose_dataset)//args.batch_size, loss.item()))
-
-        if scheduler is not None:
-            scheduler.step()
-
-        avg_train_loss = loss_sum / len(train_loader)
-        print(f'Epoch [{epoch+1}/{args.num_epochs}], Average Training Loss: {avg_train_loss:.6f}')
-
+    for epoch in range(params.num_epochs):
+        avg_train_loss = train_one_epoch(
+            params=params,
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            data_loader=train_loader,
+            device=device,
+            epoch=epoch,
+            scheduler=scheduler
+        )
         # Save the last checkpoint
         checkpoint_path = os.path.join('output', summary_name, 'checkpoint.ckpt')
-        torch.save({
+        checkpoint = {
             'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-        }, checkpoint_path)
+        }
+        torch.save(checkpoint, checkpoint_path)
 
         # Save the best model based on training loss
         if avg_train_loss < best_train_loss:
@@ -165,3 +165,8 @@ if __name__ == '__main__':
             torch.save(model.state_dict(), os.path.join('output', summary_name, 'best_model.pt'))
 
     print('Training completed.')
+
+
+if __name__ == '__main__':
+    args = parse_args()
+    main(args)

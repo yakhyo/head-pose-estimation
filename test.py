@@ -3,12 +3,10 @@ import argparse
 import torch
 import numpy as np
 import cv2
-from torch.backends import cudnn
-from torchvision import transforms
-from torch.utils.data import DataLoader
+
 from models import resnet
 from utils import datasets, helpers
-
+from utils.helpers import get_dataset
 
 
 def parse_args():
@@ -18,9 +16,10 @@ def parse_args():
     # Dataset and data paths
     parser.add_argument('--data', type=str, default='data/AFLW2000', help='Directory path for data.')
     parser.add_argument('--dataset', type=str, default='AFLW2000', help='Dataset type.')
+    parser.add_argument("--num-workers", type=int, default=8, help="Number of workers for data loading.")
 
     # Model configuration
-    parser.add_argument('--snapshot', type=str, default='', help='Name of model snapshot.')
+    parser.add_argument('--weights', type=str, default='', help='Path to model weight for evaluation.')
 
     # Training configuration
     parser.add_argument('--batch-size', type=int, default=64, help='Batch size.')
@@ -37,23 +36,10 @@ if __name__ == '__main__':
 
     print('Loading data.')
 
-    transformations = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-
-    pose_dataset = datasets.getDataset(
-        args.dataset,
-        args.data,
-        transformations,
-        train_mode=False
-    )
-    test_loader = DataLoader(dataset=pose_dataset, batch_size=args.batch_size, num_workers=2)
+    test_dataset, test_loader = get_dataset(args, train=False)
 
     model = resnet.resnet18(num_classes=6)
-    model.load_state_dict(torch.load(args.snapshot)['model_state_dict'])
+    model.load_state_dict(torch.load(args.weights))
     model.to(device)
     model.eval()
 

@@ -1,6 +1,5 @@
 import os
 import math
-from math import cos, sin
 
 import numpy as np
 import torch
@@ -9,11 +8,6 @@ import cv2
 
 
 import torch
-from torch.utils.data import DataLoader
-from torchvision import transforms
-
-from models import resnet18, resnet34, resnet50, mobilenet_v2
-from utils.datasets import AFLW, AFLW2000, AFW, BIWI, Pose300W
 
 
 def plot_pose_cube(img, yaw, pitch, roll, tdx=None, tdy=None, size=150):
@@ -49,7 +43,7 @@ def plot_pose_cube(img, yaw, pitch, roll, tdx=None, tdy=None, size=150):
 
     x1 = size * (np.cos(yaw) * np.cos(roll)) + face_x
     y1 = size * (np.cos(pitch) * np.sin(roll) + np.cos(roll) * np.sin(pitch) * np.sin(yaw)) + face_y
-    x2 = size * (-cos(yaw) * sin(roll)) + face_x
+    x2 = size * (-np.cos(yaw) * np.sin(roll)) + face_x
     y2 = size * (np.cos(pitch) * np.cos(roll) - np.sin(pitch) * np.sin(yaw) * np.sin(roll)) + face_y
     x3 = size * (np.sin(yaw)) + face_x
     y3 = size * (-np.cos(yaw) * np.sin(pitch)) + face_y
@@ -81,38 +75,43 @@ def plot_pose_cube(img, yaw, pitch, roll, tdx=None, tdy=None, size=150):
     return img
 
 
-def draw_axis(img, yaw, pitch, roll, tdx=None, tdy=None, size=100):
+def draw_axis(image, yaw, pitch, roll, bbox, size_ratio=0.5):
+    # Convert angles to radians
+    yaw = -np.radians(yaw)
+    pitch = np.radians(pitch)
+    roll = np.radians(roll)
 
-    pitch = pitch * np.pi / 180
-    yaw = -(yaw * np.pi / 180)
-    roll = roll * np.pi / 180
+    # Bounding box calculations
+    x_min, y_min, x_max, y_max = bbox
+    tdx = int(x_min + (x_max - x_min) * 0.5)
+    tdy = int(y_min + (y_max - y_min) * 0.5)
 
-    if tdx != None and tdy != None:
-        tdx = tdx
-        tdy = tdy
-    else:
-        height, width = img.shape[:2]
-        tdx = width / 2
-        tdy = height / 2
+    bbox_size = min(x_max - x_min, y_max - y_min)
+    size = bbox_size * size_ratio
 
-    # X-Axis pointing to right. drawn in red
-    x1 = size * (cos(yaw) * cos(roll)) + tdx
-    y1 = size * (cos(pitch) * sin(roll) + cos(roll) * sin(pitch) * sin(yaw)) + tdy
+    # Pre-compute trigonometric values
+    cos_yaw = np.cos(yaw)
+    sin_yaw = np.sin(yaw)
+    cos_pitch = np.cos(pitch)
+    sin_pitch = np.sin(pitch)
+    cos_roll = np.cos(roll)
+    sin_roll = np.sin(roll)
+
+    # X-Axis | drawn in red
+    x1 = int(size * (cos_yaw * cos_roll) + tdx)
+    y1 = int(size * (cos_pitch * sin_roll + cos_roll * sin_pitch * sin_yaw) + tdy)
 
     # Y-Axis | drawn in green
-    #        v
-    x2 = size * (-cos(yaw) * sin(roll)) + tdx
-    y2 = size * (cos(pitch) * cos(roll) - sin(pitch) * sin(yaw) * sin(roll)) + tdy
+    x2 = int(size * (-cos_yaw * sin_roll) + tdx)
+    y2 = int(size * (cos_pitch * cos_roll - sin_pitch * sin_yaw * sin_roll) + tdy)
 
-    # Z-Axis (out of the screen) drawn in blue
-    x3 = size * (sin(yaw)) + tdx
-    y3 = size * (-cos(yaw) * sin(pitch)) + tdy
+    # Z-Axis | drawn in blue
+    x3 = int(size * sin_yaw + tdx)
+    y3 = int(size * (-cos_yaw * sin_pitch) + tdy)
 
-    cv2.line(img, (int(tdx), int(tdy)), (int(x1), int(y1)), (0, 0, 255), 4)
-    cv2.line(img, (int(tdx), int(tdy)), (int(x2), int(y2)), (0, 255, 0), 4)
-    cv2.line(img, (int(tdx), int(tdy)), (int(x3), int(y3)), (255, 0, 0), 4)
-
-    return img
+    cv2.line(image, (tdx, tdy), (x1, y1), (0, 0, 255), 2)  # Red (X-axis)
+    cv2.line(image, (tdx, tdy), (x2, y2), (0, 255, 0), 2)  # Green (Y-axis)
+    cv2.line(image, (tdx, tdy), (x3, y3), (255, 0, 0), 2)  # Blue (Z-axis)
 
 
 def normalize_vector(v):
@@ -245,56 +244,3 @@ def get_rotation_matrix(x, y, z):
 
     R = Rz.dot(Ry.dot(Rx))
     return R
-
-
-def get_dataset(params, train=True):
-
-    if train:
-        transform = transforms.Compose([
-            transforms.RandomResizedCrop(size=224, scale=(0.8, 1)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-    else:
-        transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-
-    if params.dataset == '300W':
-        pose_dataset = Pose300W(params.data, transform)
-    elif params.dataset == 'AFLW2000':
-        pose_dataset = AFLW2000(params.data, transform)
-    elif params.dataset == 'BIWI':
-        pose_dataset = BIWI(params.data,  transform, train_mode=train)
-    elif params.dataset == 'AFLW':
-        pose_dataset = AFLW(params.data,  transform)
-    elif params.dataset == 'AFW':
-        pose_dataset = AFW(params.data,  transform)
-    else:
-        raise NameError('Error: not a valid dataset name')
-
-    data_loader = torch.utils.data.DataLoader(
-        dataset=pose_dataset,
-        batch_size=params.batch_size,
-        shuffle=True if train else False,
-        num_workers=params.num_workers
-    )
-    return pose_dataset, data_loader
-
-
-def get_model(arch, num_classes=6, pretrained=True):
-    """Return the model based on the specified architecture."""
-    if arch == 'resnet18':
-        model = resnet18(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet34':
-        model = resnet34(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet50':
-        model = resnet50(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv2":
-        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
-    else:
-        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
-    return model

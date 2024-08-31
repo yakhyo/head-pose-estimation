@@ -2,16 +2,14 @@ import os
 import cv2
 import random
 import numpy as np
+from scipy import io
 from PIL import Image, ImageFilter
 
-
 import torch
-from torch.utils.data.dataset import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
-
-from scipy import io
-from utils import helpers
+from utils.general import get_rotation_matrix
 
 
 def load_filenames(root_dir):
@@ -76,7 +74,7 @@ class Pose300W(Dataset):
         if random.random() < 0.05:
             image = image.filter(ImageFilter.BLUR)
 
-        rotation_matrix = helpers.get_rotation_matrix(pitch, yaw, roll)
+        rotation_matrix = get_rotation_matrix(pitch, yaw, roll)
         rotation_matrix = torch.tensor(rotation_matrix, dtype=torch.float32)
 
         if self.transform is not None:
@@ -118,7 +116,7 @@ class AFLW2000(Dataset):
         x_min, y_min, x_max, y_max = map(int, (x_min, y_min, x_max, y_max))
         image = image.crop((x_min, y_min, x_max, y_max))
 
-        rotation_matrix = helpers.get_rotation_matrix(pitch, yaw, roll)
+        rotation_matrix = get_rotation_matrix(pitch, yaw, roll)
         rotation_matrix = torch.tensor(rotation_matrix, dtype=torch.float32)
 
         labels = torch.tensor([pitch, yaw, roll], dtype=torch.float32)
@@ -283,3 +281,41 @@ class BIWI(Dataset):
     def __len__(self):
         # 15,667
         return self.length
+
+
+def get_dataset(params, train=True):
+
+    if train:
+        transform = transforms.Compose([
+            transforms.RandomResizedCrop(size=224, scale=(0.8, 1)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    if params.dataset == '300W':
+        pose_dataset = Pose300W(params.data, transform)
+    elif params.dataset == 'AFLW2000':
+        pose_dataset = AFLW2000(params.data, transform)
+    elif params.dataset == 'BIWI':
+        pose_dataset = BIWI(params.data,  transform, train_mode=train)
+    elif params.dataset == 'AFLW':
+        pose_dataset = AFLW(params.data,  transform)
+    elif params.dataset == 'AFW':
+        pose_dataset = AFW(params.data,  transform)
+    else:
+        raise NameError('Error: not a valid dataset name')
+
+    data_loader = torch.utils.data.DataLoader(
+        dataset=pose_dataset,
+        batch_size=params.batch_size,
+        shuffle=True if train else False,
+        num_workers=params.num_workers
+    )
+    return pose_dataset, data_loader

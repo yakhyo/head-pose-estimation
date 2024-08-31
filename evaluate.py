@@ -6,8 +6,9 @@ import numpy as np
 
 import torch
 
-from utils import datasets, helpers
-from utils.helpers import get_dataset, get_model
+from models import resnet18, resnet34, resnet50, mobilenet_v2
+from utils.datasets import get_dataset
+from utils.general import compute_euler_angles_from_rotation_matrices
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -37,6 +38,21 @@ def parse_args():
     return parser.parse_args()
 
 
+def get_model(arch, num_classes=6, pretrained=True):
+    """Return the model based on the specified architecture."""
+    if arch == 'resnet18':
+        model = resnet18(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet34':
+        model = resnet34(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet50':
+        model = resnet50(pretrained=pretrained, num_classes=num_classes)
+    elif arch == "mobilenetv2":
+        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
+    else:
+        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
+    return model
+
+
 @torch.no_grad()
 def evaluate(
     params,
@@ -60,7 +76,7 @@ def evaluate(
         r_gt_deg = cont_labels[:, 2].float() * 180 / np.pi
 
         R_pred = model(images)
-        euler = helpers.compute_euler_angles_from_rotation_matrices(R_pred) * 180 / np.pi
+        euler = compute_euler_angles_from_rotation_matrices(R_pred) * 180 / np.pi
 
         p_pred_deg = euler[:, 0].cpu()
         y_pred_deg = euler[:, 1].cpu()

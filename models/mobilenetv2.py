@@ -4,7 +4,7 @@ from torchvision.models import MobileNet_V2_Weights
 
 from typing import Any, Callable, List, Optional
 
-from utils import helpers
+from utils.general import compute_rotation_matrix_from_ortho6d
 
 
 __all__ = ["mobilenet_v2"]
@@ -205,7 +205,7 @@ class MobileNetV2(nn.Module):
         # x = self.classifier(x)
 
         x = self.linear_reg(x)
-        return helpers.compute_rotation_matrix_from_ortho6d(x)
+        return compute_rotation_matrix_from_ortho6d(x)
 
 
 def load_filtered_state_dict(model, state_dict):

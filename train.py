@@ -8,8 +8,11 @@ from PIL import Image
 
 import torch
 
+
+from models import resnet18, resnet34, resnet50, mobilenet_v2
 from utils.loss import GeodesicLoss
-from utils.helpers import get_dataset, get_model
+from utils.datasets import get_dataset
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -65,6 +68,21 @@ def parse_args():
     return parser.parse_args()
 
 
+def get_model(arch, num_classes=6, pretrained=True):
+    """Return the model based on the specified architecture."""
+    if arch == 'resnet18':
+        model = resnet18(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet34':
+        model = resnet34(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet50':
+        model = resnet50(pretrained=pretrained, num_classes=num_classes)
+    elif arch == "mobilenetv2":
+        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
+    else:
+        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
+    return model
+
+
 def train_one_epoch(
     params,
     model,
@@ -117,7 +135,7 @@ def main(params):
     if not os.path.exists('output'):
         os.makedirs('output')
 
-    summary_name = '{}_{}'.format('resnet18', int(time.time()), params.batch_size)
+    summary_name = '{}_{}'.format(params.arch, int(time.time()), params.batch_size)
 
     if not os.path.exists(f'output/{summary_name}'):
         os.makedirs(f'output/{summary_name}')

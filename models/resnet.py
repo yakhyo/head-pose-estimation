@@ -4,7 +4,7 @@ from torchvision.models import ResNet18_Weights, ResNet34_Weights, ResNet50_Weig
 
 from typing import Any, Callable, List, Optional, Type, Tuple
 
-from utils import helpers
+from utils.general import compute_rotation_matrix_from_ortho6d
 
 __all__ = ["resnet18", "resnet34", "resnet50"]
 
@@ -247,7 +247,7 @@ class ResNet(nn.Module):
         # x = self.fc(x)
         x = self.linear_reg(x)
 
-        return helpers.compute_rotation_matrix_from_ortho6d(x)
+        return compute_rotation_matrix_from_ortho6d(x)
 
 
 def load_filtered_state_dict(model, state_dict):

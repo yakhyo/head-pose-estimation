@@ -1,52 +1,52 @@
 import os
-import math
-
-import numpy as np
-import torch
-import scipy.io as sio
 import cv2
-
+import math
+import numpy as np
+import scipy.io as sio
 
 import torch
+from typing import List
 
 
-def plot_pose_cube(img, yaw, pitch, roll, tdx=None, tdy=None, size=150):
+def draw_cube(image: np.ndarray, yaw: float, pitch: float, roll: float, bbox: List[int], size: int = 150) -> None:
     """
     Plots a 3D pose cube on a given image based on yaw, pitch, and roll angles.
 
     Args:
-        img (np.array): The input image where the cube will be drawn.
+        image (np.array): The input image where the cube will be drawn.
         yaw (float): The yaw angle in degrees.
         pitch (float): The pitch angle in degrees.
         roll (float): The roll angle in degrees.
-        tdx (float, optional): X-coordinate of the cube's center. Defaults to image center.
-        tdy (float, optional): Y-coordinate of the cube's center. Defaults to image center.
+        bbox (List[int]): Bounding box coordinates as [x_min, y_min, x_max, y_max].
         size (float, optional): Size of the cube. Defaults to 150.
-
-    Returns:
-        np.array: The image with the 3D pose cube drawn on it.
     """
     # Convert angles from degrees to radians
-    pitch = pitch * np.pi / 180
-    yaw = -yaw * np.pi / 180
-    roll = roll * np.pi / 180
+    yaw, pitch, roll = np.radians([-yaw, pitch, roll])
 
-    # Default face center
-    if tdx is None or tdy is None:
-        height, width = img.shape[:2]
-        tdx = width / 2
-        tdy = height / 2
+    # Bounding box calculations
+    x_min, y_min, x_max, y_max = bbox
+    tdx = int(x_min + (x_max - x_min) * 0.5)
+    tdy = int(y_min + (y_max - y_min) * 0.5)
 
     # Calculate cube's face coordinates
     face_x = tdx - 0.5 * size
     face_y = tdy - 0.5 * size
 
-    x1 = size * (np.cos(yaw) * np.cos(roll)) + face_x
-    y1 = size * (np.cos(pitch) * np.sin(roll) + np.cos(roll) * np.sin(pitch) * np.sin(yaw)) + face_y
-    x2 = size * (-np.cos(yaw) * np.sin(roll)) + face_x
-    y2 = size * (np.cos(pitch) * np.cos(roll) - np.sin(pitch) * np.sin(yaw) * np.sin(roll)) + face_y
-    x3 = size * (np.sin(yaw)) + face_x
-    y3 = size * (-np.cos(yaw) * np.sin(pitch)) + face_y
+    # Pre-compute trigonometric values
+    cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
+    cos_pitch, sin_pitch = np.cos(pitch), np.sin(pitch)
+    cos_roll, sin_roll = np.cos(roll), np.sin(roll)
+
+    # Calculate cube's edge points
+    x1 = int(size * (cos_yaw * cos_roll) + face_x)
+    y1 = int(size * (cos_pitch * sin_roll + cos_roll * sin_pitch * sin_yaw) + face_y)
+    x2 = int(size * (-cos_yaw * sin_roll) + face_x)
+    y2 = int(size * (cos_pitch * cos_roll - sin_pitch * sin_yaw * sin_roll) + face_y)
+    x3 = int(size * sin_yaw + face_x)
+    y3 = int(size * (-cos_yaw * sin_pitch) + face_y)
+
+    # Convert coordinates to integers
+    face_x, face_y = int(face_x), int(face_y)
 
     # Define cube lines' color and thickness
     red = (0, 0, 255)
@@ -54,32 +54,54 @@ def plot_pose_cube(img, yaw, pitch, roll, tdx=None, tdy=None, size=150):
     green = (0, 255, 0)
 
     # Draw cube edges
-    cv2.line(img, (int(face_x), int(face_y)), (int(x1), int(y1)), red, 3)
-    cv2.line(img, (int(face_x), int(face_y)), (int(x2), int(y2)), red, 3)
-    cv2.line(img, (int(x2), int(y2)), (int(x2 + x1 - face_x), int(y2 + y1 - face_y)), red, 3)
-    cv2.line(img, (int(x1), int(y1)), (int(x1 + x2 - face_x), int(y1 + y2 - face_y)), red, 3)
+    cv2.line(image, (face_x, face_y), (x1, y1), color=red, thickness=2)
+    cv2.line(image, (face_x, face_y), (x2, y2), color=red, thickness=2)
+    cv2.line(image, (x2, y2), (x2 + x1 - face_x, y2 + y1 - face_y), color=red, thickness=2)
+    cv2.line(image, (x1, y1), (x1 + x2 - face_x, y1 + y2 - face_y), color=red, thickness=2)
 
-    cv2.line(img, (int(face_x), int(face_y)), (int(x3), int(y3)), blue, 2)
-    cv2.line(img, (int(x1), int(y1)), (int(x1 + x3 - face_x), int(y1 + y3 - face_y)), blue, 2)
-    cv2.line(img, (int(x2), int(y2)), (int(x2 + x3 - face_x), int(y2 + y3 - face_y)), blue, 2)
-    cv2.line(img, (int(x2 + x1 - face_x), int(y2 + y1 - face_y)),
-             (int(x3 + x1 + x2 - 2 * face_x), int(y3 + y2 + y1 - 2 * face_y)), blue, 2)
+    cv2.line(image, (face_x, face_y), (x3, y3), (255, 0, 0), 2)
+    cv2.line(image, (x1, y1), (x1 + x3 - face_x, y1 + y3 - face_y), color=blue, thickness=2)
+    cv2.line(image, (x2, y2), (x2 + x3 - face_x, y2 + y3 - face_y), color=blue, thickness=2)
+    cv2.line(
+        image,
+        (x2 + x1 - face_x, y2 + y1 - face_y),
+        (x3 + x1 + x2 - 2 * face_x, y3 + y2 + y1 - 2 * face_y),
+        color=blue,
+        thickness=2
+    )
 
-    cv2.line(img, (int(x3 + x1 - face_x), int(y3 + y1 - face_y)),
-             (int(x3 + x1 + x2 - 2 * face_x), int(y3 + y2 + y1 - 2 * face_y)), green, 2)
-    cv2.line(img, (int(x2 + x3 - face_x), int(y2 + y3 - face_y)),
-             (int(x3 + x1 + x2 - 2 * face_x), int(y3 + y2 + y1 - 2 * face_y)), green, 2)
-    cv2.line(img, (int(x3), int(y3)), (int(x3 + x1 - face_x), int(y3 + y1 - face_y)), green, 2)
-    cv2.line(img, (int(x3), int(y3)), (int(x3 + x2 - face_x), int(y3 + y2 - face_y)), green, 2)
+    cv2.line(
+        image,
+        (x3 + x1 - face_x, y3 + y1 - face_y),
+        (x3 + x1 + x2 - 2 * face_x, y3 + y2 + y1 - 2 * face_y),
+        color=green,
+        thickness=2
+    )
+    cv2.line(
+        image,
+        (x2 + x3 - face_x, y2 + y3 - face_y),
+        (x3 + x1 + x2 - 2 * face_x, y3 + y2 + y1 - 2 * face_y),
+        color=green,
+        thickness=2
+    )
+    cv2.line(image, (x3, y3), (x3 + x1 - face_x, y3 + y1 - face_y), color=green, thickness=2)
+    cv2.line(image, (x3, y3), (x3 + x2 - face_x, y3 + y2 - face_y), color=green, thickness=2)
 
-    return img
 
+def draw_axis(image: np.ndarray, yaw: float, pitch: float, roll: float, bbox: List[int], size_ratio: float = 0.5) -> None:
+    """
+    Draws 3D coordinate axes on a 2D image based on yaw, pitch, and roll angles.
 
-def draw_axis(image, yaw, pitch, roll, bbox, size_ratio=0.5):
-    # Convert angles to radians
-    yaw = -np.radians(yaw)
-    pitch = np.radians(pitch)
-    roll = np.radians(roll)
+    Args:
+        image (numpy.ndarray): The image to draw on.
+        yaw (float): Yaw angle in degrees.
+        pitch (float): Pitch angle in degrees.
+        roll (float): Roll angle in degrees.
+        bbox (List[int]): Bounding box [x_min, y_min, x_max, y_max].
+        size_ratio (float, optional): Scaling factor for the axis length. Defaults to 0.5.
+    """
+    # Convert angles from degrees to radians
+    yaw, pitch, roll = np.radians([-yaw, pitch, roll])
 
     # Bounding box calculations
     x_min, y_min, x_max, y_max = bbox

@@ -63,7 +63,7 @@ def parse_args():
     )
 
     # Output path
-    parser.add_argument('--output', type=str, default='', help='Path of model output.')
+    parser.add_argument('--output', type=str, default='output', help='Path of model output.')
 
     return parser.parse_args()
 
@@ -132,13 +132,13 @@ def train_one_epoch(
 def main(params):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if not os.path.exists('output'):
-        os.makedirs('output')
+    if not os.path.exists(params.output):
+        os.makedirs(params.output)
 
     summary_name = '{}_{}'.format(params.arch, int(time.time()), params.batch_size)
 
-    if not os.path.exists(f'output/{summary_name}'):
-        os.makedirs(f'output/{summary_name}')
+    if not os.path.exists(f'{params.output}/{summary_name}'):
+        os.makedirs(f'{params.output}/{summary_name}')
 
     model = get_model(params.arch, num_classes=6)
     model.to(device)
@@ -188,7 +188,7 @@ def main(params):
             scheduler=scheduler
         )
         # Save the last checkpoint
-        checkpoint_path = os.path.join('output', summary_name, 'checkpoint.ckpt')
+        checkpoint_path = os.path.join(params.output, summary_name, 'checkpoint.ckpt')
         checkpoint = {
             'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
@@ -199,7 +199,7 @@ def main(params):
         # Save the best model based on training loss
         if avg_train_loss < best_train_loss:
             best_train_loss = avg_train_loss
-            torch.save(model.state_dict(), os.path.join('output', summary_name, 'best_model.pt'))
+            torch.save(model.state_dict(), os.path.join(params.output, summary_name, 'best_model.pt'))
 
     logging.info('Training completed.')
 

@@ -6,12 +6,12 @@ import warnings
 
 import cv2
 import numpy as np
-from PIL import Image
+
 import torch
 from torchvision import transforms
 
-from utils.general import compute_euler_angles_from_rotation_matrices, draw_cube, draw_axis
 from models import resnet18, resnet34, resnet50, mobilenet_v2, SCRFD
+from utils.general import compute_euler_angles_from_rotation_matrices, draw_cube, draw_axis
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -19,10 +19,22 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
 
 def parse_args():
     """Parse input arguments."""
-    parser = argparse.ArgumentParser(description='Head pose estimation using the 6DRepNet.')
-    parser.add_argument('--cam', type=str, default=0, help='Camera device id to use [0]')
+    parser = argparse.ArgumentParser(description='Head pose estimation inference.')
+    parser.add_argument("--arch", type=str, default="resnet18", help="Model name, default `resnet18`")
+    parser.add_argument(
+        "--input",
+        type=str,
+        default='assets/in_video.mp4',
+        help="Path to input video file or camera id"
+    )
     parser.add_argument("--view", action="store_true", help="Display the inference results")
-    parser.add_argument("--draw-type", type=str, default='cube', help="Draw cube or axis for head pose")
+    parser.add_argument(
+        "--draw-type",
+        type=str,
+        default='cube',
+        choices=['cube', 'axis'],
+        help="Draw cube or axis for head pose"
+    )
     parser.add_argument('--weights', type=str, required=True, help='Path to head pose estimation model weights')
     parser.add_argument("--output", type=str, default="output.mp4", help="Path to save output file")
 
@@ -56,33 +68,58 @@ def expand_bbox(x_min, y_min, x_max, y_max, factor=0.2):
     return max(0, x_min_new), max(0, y_min_new), x_max_new, y_max_new
 
 
-def main():
-    args = parse_args()
+def get_model(arch, num_classes=6, pretrained=False):
+    """Return the model based on the specified architecture."""
+    if arch == 'resnet18':
+        model = resnet18(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet34':
+        model = resnet34(pretrained=pretrained, num_classes=num_classes)
+    elif arch == 'resnet50':
+        model = resnet50(pretrained=pretrained, num_classes=num_classes)
+    elif arch == "mobilenetv2":
+        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
+    else:
+        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
+    return model
+
+
+def main(params):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = resnet18(num_classes=6, pretrained=False)
-    state_dict = torch.load(args.weights, map_location=device)
-    model.load_state_dict(state_dict)
-    model.to(device)
-    model.eval()  # Set model to evaluation mode
+    try:
+        face_detector = SCRFD(model_path="./weights/det_10g.onnx")
+        logging.info("Face Detection model weights loaded.")
+    except Exception as e:
+        logging.info(f"Exception occured while loading pre-trained weights of face detection model. Exception: {e}")
 
-    logging.info('Loading data.')
+    try:
+        head_pose = get_model(params.arch, num_classes=6)
+        state_dict = torch.load(params.weights, map_location=device)
+        head_pose.load_state_dict(state_dict)
+        logging.info("Head Pose Estimation model weights loaded.")
+    except Exception as e:
+        logging.info(
+            f"Exception occured while loading pre-trained weights of head pose estimation model. Exception: {e}")
 
-    assert os.path.isfile("./weights/det_10g.onnx"), f"Face detector model path is not correct"
-    face_detector = SCRFD(model_path="./weights/det_10g.onnx")
-    logging.info("Face Detection model weights loaded.")
+    head_pose.to(device)
+    head_pose.eval()
 
     # Initialize video capture
-    cap = cv2.VideoCapture(args.cam)
+    video_source = params.input
+    if video_source.isdigit() or video_source == '0':
+        cap = cv2.VideoCapture(int(video_source))
+    else:
+        cap = cv2.VideoCapture(video_source)
+
     if not cap.isOpened():
         raise IOError("Cannot open webcam")
 
     # Initialize VideoWriter if saving video
-    if args.output:
+    if params.output:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        out = cv2.VideoWriter(args.output, fourcc, cap.get(cv2.CAP_PROP_FPS), (width, height))
+        out = cv2.VideoWriter(params.output, fourcc, cap.get(cv2.CAP_PROP_FPS), (width, height))
 
     with torch.no_grad():
         while True:
@@ -103,7 +140,7 @@ def main():
                 image = image.to(device)
 
                 start = time.time()
-                rotation_matrix = model(image)
+                rotation_matrix = head_pose(image)
                 logging.info('Head pose estimation: %.2f ms' % ((time.time() - start) * 1000))
 
                 euler = np.degrees(compute_euler_angles_from_rotation_matrices(rotation_matrix))
@@ -130,20 +167,21 @@ def main():
                         size_ratio=0.5
                     )
 
-            if args.view:
+            if params.view:
                 cv2.imshow('Demo', frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
             # Write the frame to the video file if saving
-            if args.output:
+            if params.output:
                 out.write(frame)
 
     cap.release()
-    if args.output:
+    if params.output:
         out.release()
     cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(args)

@@ -35,24 +35,24 @@ pip install -r requirements.txt
 
    a) Download weights from the following links (Trained on 300W-LP and evaluated on AFLW200 dataset):
 
-    | Model        | Weights                                                                                                  | Size    | Epochs | MAE  | Yaw  | Pitch | Roll |
-    | ------------ | -------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- | ---- | ----- | ---- |
-    | ResNet-18    | [resnet18.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet18.pt)       | 43 MB   | 100    | 4.76 | 4.48 | 5.75  | 4.06 |
-    | ResNet-34    | [resnet34.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet34.pt)       | 81.6 MB | 100    | \*   | \*   | \*    | \*   |
-    | ResNet-50    | [resnet50.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet50.pt)       | 91.3 MB | 100    | \*   | \*   | \*    | \*   |
-    | MobileNet V2 | [mobilenetv2.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv2.pt) | 9.59 MB | 100    | 5.46 | 5.46 | 6.33  | 4.59 |
+   | Model        | Weights                                                                                                  | Size    | Epochs | MAE  | Yaw  | Pitch | Roll |
+   | ------------ | -------------------------------------------------------------------------------------------------------- | ------- | ------ | ---- | ---- | ----- | ---- |
+   | ResNet-18    | [resnet18.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet18.pt)       | 43 MB   | 100    | 4.76 | 4.48 | 5.75  | 4.06 |
+   | ResNet-34    | [resnet34.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet34.pt)       | 81.6 MB | 100    | 4.65 | 4.61 | 5.46  | 3.89 |
+   | ResNet-50    | [resnet50.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet50.pt)       | 91.3 MB | 100    | \*   | \*   | \*    | \*   |
+   | MobileNet V2 | [mobilenetv2.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv2.pt) | 9.59 MB | 100    | 5.46 | 5.46 | 6.33  | 4.59 |
 
-    '\*' - soon will be uploaded...
+   '\*' - soon will be uploaded...
 
-    b) Run the command below to download weights to the `weights` directory (Linux):
+   b) Run the command below to download weights to the `weights` directory (Linux):
 
-    ```bash
-    sh download.sh [model_name]
-                resnet18
-                resnet34
-                resnet50
-                mobilenetv2
-    ```
+   ```bash
+   sh download.sh [model_name]
+               resnet18
+               resnet34
+               resnet50
+               mobilenetv2
+   ```
 
 ## Usage
 

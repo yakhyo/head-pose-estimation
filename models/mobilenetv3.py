@@ -160,14 +160,16 @@ class MobileNetV3(nn.Module):
 
         self.features = nn.Sequential(*layers)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.classifier = nn.Sequential(
-            nn.Linear(lastconv_output_channels, last_channel),
-            nn.Hardswish(inplace=True),
-            nn.Dropout(p=dropout, inplace=True),
-            # nn.Linear(last_channel, num_classes),
-        )
+        
+        # build classifier
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(lastconv_output_channels, last_channel),
+        #     nn.Hardswish(inplace=True),
+        #     nn.Dropout(p=dropout, inplace=True),
+        #     nn.Linear(last_channel, num_classes),
+        # )
 
-        self.linear_reg = nn.Linear(last_channel, num_classes)
+        self.linear_reg = nn.Linear(lastconv_output_channels, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -187,7 +189,8 @@ class MobileNetV3(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
 
-        x = self.classifier(x)
+        # classification layer
+        # x = self.classifier(x)
 
         x = self.linear_reg(x)
 

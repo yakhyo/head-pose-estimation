@@ -20,7 +20,7 @@ from models import (
 
 from utils.loss import GeodesicLoss
 from utils.datasets import get_dataset
-
+from utils.general import random_seed
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -142,6 +142,7 @@ def train_one_epoch(
 
 
 def main(params):
+    random_seed()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if not os.path.exists(params.output):

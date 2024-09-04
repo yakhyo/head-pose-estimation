@@ -126,10 +126,10 @@ class MobileNetV2(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         # building classifier
-        self.classifier = nn.Sequential(
-            nn.Dropout(p=dropout),
-            # nn.Linear(self.last_channel, num_classes),
-        )
+        # self.classifier = nn.Sequential(
+        #     nn.Dropout(p=dropout),
+        #     nn.Linear(self.last_channel, num_classes),
+        # )
 
         self.linear_reg = nn.Linear(self.last_channel, num_classes)
 
@@ -152,7 +152,8 @@ class MobileNetV2(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         
-        x = self.classifier(x)
+        # classification layer
+        # x = self.classifier(x)
 
         x = self.linear_reg(x)
         return compute_rotation_matrix_from_ortho6d(x)

@@ -1,11 +1,17 @@
 import os
 import cv2
-import math
+import random
 import numpy as np
 import scipy.io as sio
 
 import torch
 from typing import List
+
+
+def random_seed(seed=42):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def draw_cube(image: np.ndarray, yaw: float, pitch: float, roll: float, bbox: List[int], size: int = 150) -> None:

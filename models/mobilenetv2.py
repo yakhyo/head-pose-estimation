@@ -5,7 +5,7 @@ from torchvision.models import MobileNet_V2_Weights
 from typing import Any,  List, Optional
 
 from utils.general import compute_rotation_matrix_from_ortho6d
-from .common import _make_divisible, Conv2dNormActivation, load_filtered_state_dict
+from models.common import _make_divisible, Conv2dNormActivation, load_filtered_state_dict
 
 __all__ = ["mobilenet_v2"]
 

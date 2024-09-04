@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from torchvision.models import MobileNet_V3_Large_Weights, MobileNet_V3_Small_Weights, WeightsEnum
 
 from utils.general import compute_rotation_matrix_from_ortho6d
-from .common import _make_divisible, Conv2dNormActivation, load_filtered_state_dict,  SqueezeExcitation as SElayer
+from models.common import _make_divisible, Conv2dNormActivation, load_filtered_state_dict,  SqueezeExcitation as SElayer
 
 
 __all__ = ["mobilenet_v3_large", "mobilenet_v3_small"]

@@ -160,7 +160,7 @@ class MobileNetV3(nn.Module):
 
         self.features = nn.Sequential(*layers)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        
+
         # build classifier
         # self.classifier = nn.Sequential(
         #     nn.Linear(lastconv_output_channels, last_channel),
@@ -169,7 +169,11 @@ class MobileNetV3(nn.Module):
         #     nn.Linear(last_channel, num_classes),
         # )
 
-        self.linear_reg = nn.Linear(lastconv_output_channels, num_classes)
+        self.linear_reg = nn.Sequential(
+            nn.Linear(lastconv_output_channels, last_channel),
+            nn.Hardswish(inplace=True),
+            nn.Linear(last_channel, num_classes)
+        )
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -275,7 +279,7 @@ def mobilenet_v3_large(*, pretrained: bool = True, progress: bool = True, **kwar
 
 def mobilenet_v3_small(*, pretrained: bool = True, progress: bool = True, **kwargs: Any) -> MobileNetV3:
     if pretrained:
-        weights = MobileNet_V3_Small_Weights.verify(MobileNet_V3_Small_Weights.IMAGENET1K_V2)
+        weights = MobileNet_V3_Small_Weights.verify(MobileNet_V3_Small_Weights.IMAGENET1K_V1)
     else:
         weights = None
 

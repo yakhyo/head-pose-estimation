@@ -9,10 +9,18 @@ from PIL import Image
 import torch
 
 
-from models import resnet18, resnet34, resnet50, mobilenet_v2
+from models import (
+    resnet18,
+    resnet34,
+    resnet50,
+    mobilenet_v2,
+    mobilenet_v3_small,
+    mobilenet_v3_large
+)
+
 from utils.loss import GeodesicLoss
 from utils.datasets import get_dataset
-
+from utils.general import random_seed
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
@@ -78,6 +86,10 @@ def get_model(arch, num_classes=6, pretrained=True):
         model = resnet50(pretrained=pretrained, num_classes=num_classes)
     elif arch == "mobilenetv2":
         model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
+    elif arch == "mobilenetv3_small":
+        model = mobilenet_v3_small(pretrained=pretrained, num_classes=num_classes)
+    elif arch == "mobilenetv3_large":
+        model = mobilenet_v3_large(pretrained=pretrained, num_classes=num_classes)
     else:
         raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
     return model
@@ -130,6 +142,7 @@ def train_one_epoch(
 
 
 def main(params):
+    random_seed()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if not os.path.exists(params.output):

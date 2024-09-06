@@ -13,6 +13,7 @@ This project focuses on head pose estimation using various deep learning models,
 - [x] **Pre-trained Backbones**:
   - [x] **ResNet**: Implemented using [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385) for robust feature extraction and improved accuracy.
   - [x] **MobileNet v2**: Leveraging [MobileNetV2: Inverted Residuals and Linear Bottlenecks](https://arxiv.org/abs/1801.04381) for efficient and lightweight model performance.
+  - [x] **MobileNet v3**: Integration of [MobileNetV3: An Efficient Network Architecture for Mobile Vision](https://arxiv.org/abs/1905.02244) for optimized performance in resource-constrained environments.
 - [x] **Head Pose Estimation**: Enhanced model architecture for precise head pose estimation using the aforementioned backbones.
 - [x] **Face Detection Integration**: Utilizes [Sample and Computation Redistribution for Efficient Face Detection](https://arxiv.org/abs/2105.04714) to enable efficient inference and processing.
 

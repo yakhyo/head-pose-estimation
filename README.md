@@ -41,8 +41,8 @@ pip install -r requirements.txt
    | ResNet-34          | [resnet34.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet34.pt)                   | 81.6 MB | 100    | 4.61 | 5.46  | 3.89 | 4.65 |
    | ResNet-50          | [resnet50.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet50.pt)                   | 91.3 MB | 100    | 3.62 | 5.31  | 3.85 | 4.26 |
    | MobileNet V2       | [mobilenetv2.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv2.pt)             | 9.59 MB | 100    | 5.46 | 6.05  | 4.43 | 5.31 |
-   | MobileNet V3 small | [mobilenetv3_small.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv3_small.pt) | \* MB   | 100    | \*   | \*    | \*   | \*   |
-   | MobileNet V3 large | [mobilenetv3_large.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv3_large.pt) | \* MB   | 100    | \*   | \*    | \*   | \*   |
+   | MobileNet V3 small | [mobilenetv3_small.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv3_small.pt) | 6 MB    | 50     | 8.65 | 7.66  | 6.03 | 7.45 |
+   | MobileNet V3 large | [mobilenetv3_large.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv3_large.pt) | 17 MB   | 100    | 5.85 | 6.83  | 5.08 | 5.92 |
 
    b) Run the command below to download weights to the `weights` directory (Linux):
 

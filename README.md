@@ -53,6 +53,8 @@ pip install -r requirements.txt
                resnet34
                resnet50
                mobilenetv2
+               mobilenetv3_small
+               mobilenetv3_large
    ```
 
 ## Usage
@@ -86,6 +88,8 @@ python main.py --data data/300W_LP --dataset 300W --arch resnet18
                                                          resnet34
                                                          resnet50
                                                          mobilenetv2
+                                                         mobilenetv3_small
+                                                         mobilenetv3_large
 ```
 
 `main.py` arguments:
@@ -123,10 +127,12 @@ options:
 ### Evaluation
 
 ```bash
-python evaluate.py --data data/AFLW200 --dataset AFLW200 --weights weights/resnet18.pt --arch resnet18
-                                                                           resnet34.pt        resnet34
-                                                                           resnet50.pt        resnet50
-                                                                           mobilenetv2.pt     mobilenetv2
+python evaluate.py --data data/AFLW200 --dataset AFLW200 --weights weights/resnet18.pt     --arch resnet18
+                                                                           resnet34.pt            resnet34
+                                                                           resnet50.pt            resnet50
+                                                                           mobilenetv2.pt         mobilenetv2
+                                                                           mobilenetv3_small.pt   mobilenetv3_small
+                                                                           mobilenetv3_large.pt   mobilenetv3_large
 ```
 
 `evaluate.py` arguments:

@@ -1,6 +1,8 @@
 # Head Pose Estimation: Lightweight Head Pose Estimation using MobileNet and ResNets
 
-![Downloads](https://img.shields.io/github/downloads/yakhyo/head-pose-estimation/total) [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/yakhyo/head-pose-estimation)
+![Downloads](https://img.shields.io/github/downloads/yakhyo/head-pose-estimation/total) 
+[![GitHub Repo stars](https://img.shields.io/github/stars/yakhyo/head-pose-estimation)](https://github.com/yakhyo/head-pose-estimation/stargazers)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/yakhyo/head-pose-estimation)
 
 <video controls autoplay loop src="https://github.com/user-attachments/assets/307262d3-8fa0-4084-be6c-29ee1a3903ef" muted="false" width="100%"></video>
 <video controls autoplay loop src="https://github.com/user-attachments/assets/50f010cf-6fcf-46b0-87cc-53065cba3fe7" muted="false" width="100%"></video>

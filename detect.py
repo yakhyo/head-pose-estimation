@@ -68,7 +68,7 @@ def expand_bbox(x_min, y_min, x_max, y_max, factor=0.2):
     return max(0, x_min_new), max(0, y_min_new), x_max_new, y_max_new
 
 
-def get_model(arch, num_classes=6, pretrained=True):
+def get_model(arch, num_classes=6, pretrained=False):
     """Return the model based on the specified architecture."""
     if arch == 'resnet18':
         model = resnet18(pretrained=pretrained, num_classes=num_classes)

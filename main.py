@@ -1,29 +1,27 @@
 import os
 import time
-import logging
 import argparse
 
 import numpy as np
 from PIL import Image
 
 import torch
+from torchvision import transforms
 
 
-from models import (
-    resnet18,
-    resnet34,
-    resnet50,
-    mobilenet_v2,
-    mobilenet_v3_small,
-    mobilenet_v3_large
+from models import get_model
+
+from utils.loss import GeodesicLoss, GeodesicAndFrobeniusLoss
+from utils.datasets import Pose300W, AFLW2000
+from utils.general import (
+    LOGGER,
+    setup_seed,
+    AverageMeter,
+    reduce_tensor,
+    save_on_master,
+    init_distributed_mode,
+    compute_euler_angles_from_rotation_matrices
 )
-
-from utils.loss import GeodesicLoss
-from utils.datasets import get_dataset
-from utils.general import random_seed
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 
 def parse_args():
@@ -31,25 +29,24 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Head pose estimation training.')
 
     # Dataset and data paths
-    parser.add_argument('--data', type=str, default='data/300W_LP', help='Directory path for data.')
-    parser.add_argument('--dataset', type=str, default='300W', help='Dataset name.')
+    parser.add_argument('--data', type=str, default='data', help='Directory path for data.')
 
     # Model and training configuration
-    parser.add_argument('--num-epochs', type=int, default=100, help='Maximum number of training epochs.')
+    parser.add_argument('--epochs', type=int, default=80, help='Maximum number of training epochs.')
     parser.add_argument('--batch-size', type=int, default=128, help='Batch size.')
     parser.add_argument(
-        "--arch",
+        "--network",
         type=str,
         default="resnet18",
         help="Network architecture, currently available: resnet18/34/50, mobilenetv2"
     )
-    parser.add_argument('--lr', type=float, default=0.0001, help='Base learning rate.')
+    parser.add_argument('--lr', type=float, default=0.01, help='Base learning rate.')
     parser.add_argument("--num-workers", type=int, default=8, help="Number of workers for data loading.")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint to continue training.")
 
-    # Scheduler configuration
+    # lr_scheduler configuration
     parser.add_argument(
-        '--scheduler',
+        '--lr-scheduler',
         type=str,
         default='MultiStepLR',
         choices=['StepLR', 'MultiStepLR'],
@@ -59,7 +56,7 @@ def parse_args():
     parser.add_argument(
         '--gamma',
         type=float,
-        default=0.5,
+        default=0.1,
         help='Multiplicative factor of learning rate decay for StepLR and ExponentialLR.'
     )
     parser.add_argument(
@@ -69,47 +66,85 @@ def parse_args():
         default=[10, 20],
         help='List of epoch indices to reduce learning rate for MultiStepLR (ignored if StepLR is used).'
     )
+    parser.add_argument(
+        '--print-freq',
+        type=int,
+        default=100,
+        help='Frequency (in batches) for printing training progress. Default: 100.'
+    )
+
+    parser.add_argument("--world-size", default=1, type=int, help="Number of distributed processes")
+    parser.add_argument('--local-rank', type=int, default=0, help='Local rank for distributed training')
+    parser.add_argument(
+        "--use-deterministic-algorithms",
+        action="store_true",
+        help="Forces the use of deterministic algorithms only."
+    )
 
     # Output path
-    parser.add_argument('--output', type=str, default='output', help='Path of model output.')
-
+    parser.add_argument(
+        '--save-path',
+        type=str,
+        default='weights',
+        help='Path to save model checkpoints. Default: `weights`.'
+    )
     return parser.parse_args()
 
 
-def get_model(arch, num_classes=6, pretrained=True):
-    """Return the model based on the specified architecture."""
-    if arch == 'resnet18':
-        model = resnet18(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet34':
-        model = resnet34(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet50':
-        model = resnet50(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv2":
-        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv3_small":
-        model = mobilenet_v3_small(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv3_large":
-        model = mobilenet_v3_large(pretrained=pretrained, num_classes=num_classes)
+def load_data(train_dir, eval_dir, params):
+
+    train_transform = transforms.Compose([
+        transforms.RandomResizedCrop(size=224, scale=(0.8, 1)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    eval_transform = transforms.Compose([
+        transforms.RandomResizedCrop(size=224, scale=(0.8, 1)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    LOGGER.info("Loading training data...")
+    train_dataset = Pose300W(train_dir, transform=train_transform)
+
+    LOGGER.info("Loading evaluation data...")
+    eval_dataset = AFLW2000(eval_dir, transform=eval_transform)
+
+    if params.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        test_sampler = torch.utils.data.distributed.DistributedSampler(eval_dataset)
     else:
-        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
-    return model
+        train_sampler = torch.utils.data.RandomSampler(train_dataset)
+        test_sampler = torch.utils.data.SequentialSampler(eval_dataset)
+
+    return train_dataset, eval_dataset, train_sampler, test_sampler
 
 
 def train_one_epoch(
-    params,
     model,
     criterion,
     optimizer,
     data_loader,
     device,
     epoch,
-    scheduler=None
-):
+    params
+) -> None:
     model.train()
-    loss_sum = 0.0
-    for idx, (images, labels, _) in enumerate(data_loader):
+    losses = AverageMeter("Avg Loss", ":6.3f")
+    batch_time = AverageMeter("Batch Time", ":4.3f")
+    last_batch_idx = len(data_loader) - 1
+
+    start_time = time.time()
+    for batch_idx, (images, labels, _) in enumerate(data_loader):
+        last_batch = last_batch_idx == batch_idx
+
+        # Move data to device
         images = images.to(device)
         labels = labels.to(device)
+
+        # Reset gradients
+        optimizer.zero_grad()
 
         # Forward pass
         outputs = model(images)
@@ -117,54 +152,150 @@ def train_one_epoch(
         # Calculate loss
         loss = criterion(labels, outputs)
 
-        optimizer.zero_grad()
+        if args.distributed:
+            # reduce_tensor is used in distributed training to aggregate metrics (e.g., loss, accuracy)
+            # across multiple GPUs. It ensures all devices contribute to the final metric computation.
+            reduced_loss = reduce_tensor(loss, args.world_size)
+        else:
+            reduced_loss = loss
+
+        # Backward pass
         loss.backward()
+
+        # Update model parameters
         optimizer.step()
 
-        loss_sum += loss.item()
+        # Update metrics
+        losses.update(reduced_loss.item(), images.size(0))
+        batch_time.update(time.time() - start_time)
 
-        if (idx + 1) % 100 == 0:
-            log_message = (
-                f'Epoch [{epoch + 1}/{params.num_epochs}], '
-                f'Iter [{idx + 1}/{len(data_loader.dataset) // params.batch_size}] '
-                f'Loss: {loss.item():.6f}'
+        if device.type == 'cuda':
+            torch.cuda.synchronize()
+
+        # Reset start time for the next batch
+        start_time = time.time()
+
+        if batch_idx % params.print_freq == 0 or last_batch:
+            lr = optimizer.param_groups[0]['lr']
+            log = (
+                f'Epoch: [{epoch+1}/{params.epochs}][{batch_idx:04d}/{len(data_loader):04d}] '
+                f'Loss: {losses.avg:6.3f}, '
+                f'LR: {lr:.5f} '
+                f'Time: {batch_time.avg:4.3f}s'
             )
-            logging.info(log_message)
+            LOGGER.info(log)
 
-    if scheduler is not None:
-        scheduler.step()
+    # End-of-epoch summary
+    log = (
+        f'Epoch: [{epoch+1}/{params.epochs}] Summary: '
+        f'Loss: {losses.avg:6.3f}, '
+        f'Total Time: {batch_time.sum:4.3f}s'
+    )
+    LOGGER.info(log)
 
-    avg_train_loss = loss_sum / len(data_loader)
-    log_message = f'Epoch [{epoch + 1}/{params.num_epochs}], Average Training Loss: {avg_train_loss:.6f}'
-    logging.info(log_message)
 
-    return avg_train_loss
+@torch.no_grad()
+def evaluate(params, model, data_loader, device):
+    model.eval()
+    total = 0
+    yaw_error = pitch_error = roll_error = 0.0
+    v1_err = v2_err = v3_err = 0.0
+
+    for images, r_label, cont_labels, name in data_loader:
+        images = images.to(device)
+        total += cont_labels.size(0)
+
+        R_gt = r_label
+
+        p_gt_deg = cont_labels[:, 0].float() * 180 / np.pi
+        y_gt_deg = cont_labels[:, 1].float() * 180 / np.pi
+        r_gt_deg = cont_labels[:, 2].float() * 180 / np.pi
+
+        R_pred = model(images)
+        euler = compute_euler_angles_from_rotation_matrices(R_pred) * 180 / np.pi
+
+        p_pred_deg = euler[:, 0].cpu()
+        y_pred_deg = euler[:, 1].cpu()
+        r_pred_deg = euler[:, 2].cpu()
+
+        R_pred = R_pred.cpu()
+        v1_err += torch.sum(torch.acos(torch.clamp(torch.sum(R_gt[:, 0] * R_pred[:, 0], dim=1), -1, 1)) * 180 / np.pi)
+        v2_err += torch.sum(torch.acos(torch.clamp(torch.sum(R_gt[:, 1] * R_pred[:, 1], dim=1), -1, 1)) * 180 / np.pi)
+        v3_err += torch.sum(torch.acos(torch.clamp(torch.sum(R_gt[:, 2] * R_pred[:, 2], dim=1), -1, 1)) * 180 / np.pi)
+
+        pitch_error += torch.sum(torch.min(torch.stack([
+            torch.abs(p_gt_deg - p_pred_deg),
+            torch.abs(p_pred_deg + 360 - p_gt_deg),
+            torch.abs(p_pred_deg - 360 - p_gt_deg),
+            torch.abs(p_pred_deg + 180 - p_gt_deg),
+            torch.abs(p_pred_deg - 180 - p_gt_deg)
+        ]), dim=0)[0])
+        yaw_error += torch.sum(torch.min(torch.stack([
+            torch.abs(y_gt_deg - y_pred_deg),
+            torch.abs(y_pred_deg + 360 - y_gt_deg),
+            torch.abs(y_pred_deg - 360 - y_gt_deg),
+            torch.abs(y_pred_deg + 180 - y_gt_deg),
+            torch.abs(y_pred_deg - 180 - y_gt_deg)
+        ]), dim=0)[0])
+        roll_error += torch.sum(torch.min(torch.stack([
+            torch.abs(r_gt_deg - r_pred_deg),
+            torch.abs(r_pred_deg + 360 - r_gt_deg),
+            torch.abs(r_pred_deg - 360 - r_gt_deg),
+            torch.abs(r_pred_deg + 180 - r_gt_deg),
+            torch.abs(r_pred_deg - 180 - r_gt_deg)
+        ]), dim=0)[0])
+
+    LOGGER.info(
+        f'Yaw: {yaw_error / total:.4f} '
+        f'Pitch: {pitch_error / total:.4f} '
+        f'Roll: {roll_error / total:.4f} '
+        f'MAE: {(yaw_error + pitch_error + roll_error) / (total * 3):.4f}'
+    )
+    return (yaw_error + pitch_error + roll_error) / (total * 3)
 
 
 def main(params):
-    random_seed()
+    init_distributed_mode(params)
+
+    setup_seed()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if not os.path.exists(params.output):
-        os.makedirs(params.output)
+    if params.use_deterministic_algorithms:
+        torch.backends.cudnn.benchmark = False
+        torch.use_deterministic_algorithms(True)
+    else:
+        torch.backends.cudnn.benchmark = True
 
-    summary_name = '{}_{}'.format(params.arch, int(time.time()), params.batch_size)
+    output_path = os.path.join(params.save_path, params.network)
+    os.makedirs(output_path, exist_ok=True)
 
-    if not os.path.exists(f'{params.output}/{summary_name}'):
-        os.makedirs(f'{params.output}/{summary_name}')
-
-    model = get_model(params.arch, num_classes=6)
+    model = get_model(params.network, num_classes=6, pretrained=True)
     model.to(device)
 
+    model_without_ddp = model
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank])
+        model_without_ddp = model.module
+
     criterion = GeodesicLoss()
+    # criterion = GeodesicAndFrobeniusLoss()
     optimizer = torch.optim.Adam(model.parameters(), params.lr)
+
+    # Learning rate scheduler
+    if params.lr_scheduler == 'MultiStepLR':
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=params.milestones, gamma=params.gamma)
+    elif params.lr_scheduler == 'StepLR':
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=params.step_size, gamma=params.gamma)
+    else:
+        raise ValueError(f"Unsupported lr_scheduler type: {params.lr_scheduler}")
 
     start_epoch = 0
     if params.checkpoint and os.path.isfile(params.checkpoint):
         ckpt = torch.load(params.checkpoint, map_location=device, weights_only=True)
 
-        model.load_state_dict(ckpt['model_state_dict'])
-        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+        model_without_ddp.load_state_dict(ckpt['model'])
+        optimizer.load_state_dict(ckpt['optimizer'])
+        lr_scheduler.load_state_dict(ckpt['lr_scheduler'])
 
         # Move optimizer states to device
         for state in optimizer.state.values():
@@ -173,48 +304,76 @@ def main(params):
                     state[k] = v.to(device)
 
         start_epoch = ckpt['epoch']
-        logging.info(f'Resumed training from {params.checkpoint}, starting at epoch {start_epoch + 1}')
+        LOGGER.info(f'Resumed training from {params.checkpoint}, starting at epoch {start_epoch + 1}')
 
-    logging.info('Loading training data.')
-    train_dataset, train_loader = get_dataset(params)
+    # Datasets and DataLoaders
+    train_dir = os.path.join(params.data, "300W_LP")
+    val_dir = os.path.join(params.data, "AFLW2000")
 
-    if params.scheduler == 'MultiStepLR':
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=params.milestones, gamma=params.gamma)
-    elif params.scheduler == 'StepLR':
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=params.step_size, gamma=params.gamma)
-    else:
-        scheduler = None
+    train_dataset, val_dataset, train_sampler, test_sampler = load_data(train_dir, val_dir, params)
 
-    best_train_loss = float('inf')
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset,
+        batch_size=params.batch_size,
+        sampler=train_sampler,
+        num_workers=params.num_workers,
+        pin_memory=True
+    )
 
-    logging.info('Starting training.')
+    val_loader = torch.utils.data.DataLoader(
+        dataset=val_dataset,
+        batch_size=params.batch_size,
+        sampler=test_sampler,
+        num_workers=params.num_workers,
+        pin_memory=True
+    )
 
-    for epoch in range(start_epoch, params.num_epochs):
-        avg_train_loss = train_one_epoch(
-            params=params,
+    best_angular_error = float("inf")
+
+    LOGGER.info('Starting training.')
+
+    for epoch in range(start_epoch, params.epochs):
+        if args.distributed:
+            train_sampler.set_epoch(epoch)
+
+        train_one_epoch(
             model=model,
             criterion=criterion,
             optimizer=optimizer,
             data_loader=train_loader,
             device=device,
             epoch=epoch,
-            scheduler=scheduler
+            params=params,
         )
+        lr_scheduler.step()
         # Save the last checkpoint
-        checkpoint_path = os.path.join(params.output, summary_name, 'checkpoint.ckpt')
         checkpoint = {
             'epoch': epoch + 1,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
+            'model': model_without_ddp.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'lr_scheduler': lr_scheduler.state_dict(),
+            'args': params
         }
-        torch.save(checkpoint, checkpoint_path)
+        save_on_master(checkpoint, os.path.join(output_path, 'last_checkpoint.ckpt'))
 
-        # Save the best model based on training loss
-        if avg_train_loss < best_train_loss:
-            best_train_loss = avg_train_loss
-            torch.save(model.state_dict(), os.path.join(params.output, summary_name, 'best_model.pt'))
+        if params.local_rank == 0:
+            mean_angular_error = evaluate(params, model_without_ddp, val_loader, device)
 
-    logging.info('Training completed.')
+        # Save the best checkpoint based on training loss
+        if mean_angular_error < best_angular_error:
+            best_angular_error = mean_angular_error
+            save_on_master(checkpoint, os.path.join(output_path, 'best_checkpoint.ckpt'))
+            LOGGER.info(
+                f"New best mean angular error: {best_angular_error:.4f}."
+                f"Model saved to {output_path} with `_best` postfix."
+            )
+
+        LOGGER.info(
+            f"Epoch {epoch + 1} completed. Latest model saved to {output_path} with `_last` postfix."
+            f"Best mean angular error: {best_angular_error:.4f}"
+        )
+
+    LOGGER.info('Training completed.')
 
 
 if __name__ == '__main__':

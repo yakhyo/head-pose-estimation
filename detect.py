@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torchvision import transforms
 
-from models import resnet18, resnet34, resnet50, mobilenet_v2, mobilenet_v3_small, mobilenet_v3_large, SCRFD
+from models import get_model, SCRFD
 from utils.general import compute_euler_angles_from_rotation_matrices, draw_cube, draw_axis
 
 warnings.filterwarnings("ignore")
@@ -68,25 +68,6 @@ def expand_bbox(x_min, y_min, x_max, y_max, factor=0.2):
     return max(0, x_min_new), max(0, y_min_new), x_max_new, y_max_new
 
 
-def get_model(arch, num_classes=6, pretrained=False):
-    """Return the model based on the specified architecture."""
-    if arch == 'resnet18':
-        model = resnet18(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet34':
-        model = resnet34(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet50':
-        model = resnet50(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv2":
-        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv3_small":
-        model = mobilenet_v3_small(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv3_large":
-        model = mobilenet_v3_large(pretrained=pretrained, num_classes=num_classes)
-    else:
-        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
-    return model
-
-
 def main(params):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -97,7 +78,7 @@ def main(params):
         logging.info(f"Exception occured while loading pre-trained weights of face detection model. Exception: {e}")
 
     try:
-        head_pose = get_model(params.arch, num_classes=6)
+        head_pose = get_model(params.arch, num_classes=6, pretrained=False)
         state_dict = torch.load(params.weights, map_location=device)
         head_pose.load_state_dict(state_dict)
         logging.info("Head Pose Estimation model weights loaded.")

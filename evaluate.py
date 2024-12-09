@@ -5,9 +5,10 @@ import argparse
 import numpy as np
 
 import torch
+from torchvision import transforms
 
-from models import resnet18, resnet34, resnet50, mobilenet_v2, mobilenet_v3_small, mobilenet_v3_large
-from utils.datasets import get_dataset
+from models import get_model
+from utils.datasets import AFLW2000
 from utils.general import compute_euler_angles_from_rotation_matrices
 
 # Setup logging
@@ -22,7 +23,7 @@ def parse_args():
     parser.add_argument('--data', type=str, default='data/AFLW2000', help='Directory path for data.')
     parser.add_argument('--dataset', type=str, default='AFLW2000', help='Dataset type.')
     parser.add_argument(
-        "--arch",
+        "--network",
         type=str,
         default="resnet18",
         help="Network architecture, currently available: resnet18/34/50, mobilenetv2"
@@ -36,25 +37,6 @@ def parse_args():
     parser.add_argument('--weights', type=str, default='', help='Path to model weight for evaluation.')
 
     return parser.parse_args()
-
-
-def get_model(arch, num_classes=6, pretrained=False):
-    """Return the model based on the specified architecture."""
-    if arch == 'resnet18':
-        model = resnet18(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet34':
-        model = resnet34(pretrained=pretrained, num_classes=num_classes)
-    elif arch == 'resnet50':
-        model = resnet50(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv2":
-        model = mobilenet_v2(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv3_small":
-        model = mobilenet_v3_small(pretrained=pretrained, num_classes=num_classes)
-    elif arch == "mobilenetv3_large":
-        model = mobilenet_v3_large(pretrained=pretrained, num_classes=num_classes)
-    else:
-        raise ValueError(f"Please choose available model architecture, currently chosen: {arch}")
-    return model
 
 
 @torch.no_grad()
@@ -124,16 +106,29 @@ def evaluate(
 def main(params):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    logging.info('Loading test data.')
-    test_dataset, test_loader = get_dataset(params, train=False)
+    eval_transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
 
-    model = get_model(params.arch, num_classes=6, pretrained=False)
+    eval_dataset = AFLW2000(params.data, transform=eval_transform)
+    data_loader = torch.utils.data.DataLoader(
+        dataset=eval_dataset,
+        batch_size=params.batch_size,
+        num_workers=params.num_workers,
+        pin_memory=True
+    )
+    logging.info('Loading test data.')
+
+    model = get_model(params.network, num_classes=6, pretrained=False)
     if os.path.exists(params.weights):
-        model.load_state_dict(torch.load(params.weights, map_location=device, weights_only=True))
+        model.load_state_dict(torch.load(params.weights, map_location=device)['model'])
     else:
         raise ValueError(f"Model weight not found at {params.weights}")
     model.to(device)
-    evaluate(params=params, model=model, data_loader=test_loader, device=device)
+    evaluate(params=params, model=model, data_loader=data_loader, device=device)
 
 
 if __name__ == '__main__':

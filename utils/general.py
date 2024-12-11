@@ -35,7 +35,7 @@ class EarlyStopping:
             patience (int): Number of epochs to wait after the last improvement.
             min_delta (float): Minimum change in the monitored value to qualify as an improvement.
         """
-        self.patience = patience
+        self.patience = patience if patience != 0 else float("inf")
         self.min_delta = min_delta
         self.best_fitness = float("inf")  # Initialize to a large value for minimization
         self.best_epoch = 0

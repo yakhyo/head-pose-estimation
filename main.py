@@ -320,7 +320,8 @@ def main(params):
     )
 
     best_angular_error = float("inf")
-    early_stopping = EarlyStopping(patience=10)
+    mean_angular_error = float("inf")
+    early_stopping = EarlyStopping(patience=0)
 
     LOGGER.info('Starting training.')
 

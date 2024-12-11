@@ -8,7 +8,6 @@ from PIL import Image
 import torch
 from torchvision import transforms
 
-
 from models import get_model
 
 from utils.loss import GeodesicLoss, GeodesicAndFrobeniusLoss
@@ -16,10 +15,11 @@ from utils.datasets import Pose300W, AFLW2000
 from utils.general import (
     LOGGER,
     setup_seed,
-    AverageMeter,
     reduce_tensor,
     save_on_master,
     init_distributed_mode,
+    AverageMeter,
+    EarlyStopping,
     compute_euler_angles_from_rotation_matrices
 )
 
@@ -40,7 +40,7 @@ def parse_args():
         default="resnet18",
         help="Network architecture, currently available: resnet18/34/50, mobilenetv2"
     )
-    parser.add_argument('--lr', type=float, default=0.01, help='Base learning rate.')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Base learning rate.')
     parser.add_argument("--num-workers", type=int, default=8, help="Number of workers for data loading.")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint to continue training.")
 
@@ -56,7 +56,7 @@ def parse_args():
     parser.add_argument(
         '--gamma',
         type=float,
-        default=0.1,
+        default=0.5,
         help='Multiplicative factor of learning rate decay for StepLR and ExponentialLR.'
     )
     parser.add_argument(
@@ -75,11 +75,6 @@ def parse_args():
 
     parser.add_argument("--world-size", default=1, type=int, help="Number of distributed processes")
     parser.add_argument('--local-rank', type=int, default=0, help='Local rank for distributed training')
-    parser.add_argument(
-        "--use-deterministic-algorithms",
-        action="store_true",
-        help="Forces the use of deterministic algorithms only."
-    )
 
     # Output path
     parser.add_argument(
@@ -100,7 +95,8 @@ def load_data(train_dir, eval_dir, params):
     ])
 
     eval_transform = transforms.Compose([
-        transforms.RandomResizedCrop(size=224, scale=(0.8, 1)),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -152,10 +148,10 @@ def train_one_epoch(
         # Calculate loss
         loss = criterion(labels, outputs)
 
-        if args.distributed:
+        if params.distributed:
             # reduce_tensor is used in distributed training to aggregate metrics (e.g., loss, accuracy)
             # across multiple GPUs. It ensures all devices contribute to the final metric computation.
-            reduced_loss = reduce_tensor(loss, args.world_size)
+            reduced_loss = reduce_tensor(loss, params.world_size)
         else:
             reduced_loss = loss
 
@@ -180,7 +176,7 @@ def train_one_epoch(
             log = (
                 f'Epoch: [{epoch+1}/{params.epochs}][{batch_idx:04d}/{len(data_loader):04d}] '
                 f'Loss: {losses.avg:6.3f}, '
-                f'LR: {lr:.5f} '
+                f'LR: {lr:.7f} '
                 f'Time: {batch_time.avg:4.3f}s'
             )
             LOGGER.info(log)
@@ -255,16 +251,11 @@ def evaluate(params, model, data_loader, device):
 
 
 def main(params):
-    init_distributed_mode(params)
-
     setup_seed()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    init_distributed_mode(params)
+    torch.backends.cudnn.benchmark = True
 
-    if params.use_deterministic_algorithms:
-        torch.backends.cudnn.benchmark = False
-        torch.use_deterministic_algorithms(True)
-    else:
-        torch.backends.cudnn.benchmark = True
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     output_path = os.path.join(params.save_path, params.network)
     os.makedirs(output_path, exist_ok=True)
@@ -273,8 +264,8 @@ def main(params):
     model.to(device)
 
     model_without_ddp = model
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank])
+    if params.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[params.local_rank])
         model_without_ddp = model.module
 
     criterion = GeodesicLoss()
@@ -329,11 +320,12 @@ def main(params):
     )
 
     best_angular_error = float("inf")
+    early_stopping = EarlyStopping(patience=10)
 
     LOGGER.info('Starting training.')
 
     for epoch in range(start_epoch, params.epochs):
-        if args.distributed:
+        if params.distributed:
             train_sampler.set_epoch(epoch)
 
         train_one_epoch(
@@ -358,6 +350,9 @@ def main(params):
 
         if params.local_rank == 0:
             mean_angular_error = evaluate(params, model_without_ddp, val_loader, device)
+
+        if early_stopping(epoch, mean_angular_error):
+            break
 
         # Save the best checkpoint based on training loss
         if mean_angular_error < best_angular_error:

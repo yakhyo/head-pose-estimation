@@ -20,8 +20,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Head pose estimation evaluation.')
 
     # Dataset and data paths
-    parser.add_argument('--data', type=str, default='data/AFLW2000', help='Directory path for data.')
-    parser.add_argument('--dataset', type=str, default='AFLW2000', help='Dataset type.')
+    parser.add_argument('--data', type=str, default='data/AFLW2000/', help='Directory path for data.')
     parser.add_argument(
         "--network",
         type=str,

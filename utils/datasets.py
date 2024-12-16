@@ -42,7 +42,7 @@ class Pose300W(Dataset):
         self.root = root
         self.transform = transform
         self.filenames, removed_items = load_filenames(root)
-        print(f"{removed_items} items removed from dataset that have an angle > 99 degrees. Loaded {len(self)} files.")
+        print(f"Pose300W: {removed_items} items removed from dataset that have an angle > 99 degrees. Loaded {len(self)} files.")
 
     def __getitem__(self, idx):
         filename = self.filenames[idx]
@@ -91,7 +91,7 @@ class AFLW2000(Dataset):
         self.root = root
         self.transform = transform
         self.filenames, removed_items = load_filenames(root)
-        print(f"{removed_items} items removed from dataset that have an angle > 99 degrees. Loaded {len(self)} files.")
+        print(f"AFLW200: {removed_items} items removed from dataset that have an angle > 99 degrees. Loaded {len(self)} files.")
 
     def __getitem__(self, idx):
         filename = self.filenames[idx]
@@ -312,10 +312,17 @@ def get_dataset(params, train=True):
     else:
         raise NameError('Error: not a valid dataset name')
 
+    if params.distributed:
+        sampler = torch.utils.data.distributed.DistributedSampler(pose_dataset)
+    else:
+        sampler = torch.utils.data.RandomSampler(pose_dataset)
+        
+    
     data_loader = torch.utils.data.DataLoader(
         dataset=pose_dataset,
         batch_size=params.batch_size,
-        shuffle=True if train else False,
-        num_workers=params.num_workers
+        sampler=sampler,
+        num_workers=params.num_workers,
+        pin_memory=True
     )
-    return pose_dataset, data_loader
+    return pose_dataset, data_loader, sampler

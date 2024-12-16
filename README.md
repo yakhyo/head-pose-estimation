@@ -96,6 +96,7 @@ data/
 - Homepage: http://www.cbsr.ia.ac.cn/users/xiangyuzhu/projects/3DDFA/main.htm
 
 ### Training
+**Note**: DDP training is also supported. To use, add `torchrun --nproc_per_node=num_gpus`
 
 ```bash
 python main.py --data data/300W_LP --network resnet18

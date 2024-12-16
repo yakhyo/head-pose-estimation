@@ -123,7 +123,7 @@ def main(params):
 
     model = get_model(params.network, num_classes=6, pretrained=False)
     if os.path.exists(params.weights):
-        model.load_state_dict(torch.load(params.weights, map_location=device)['model'])
+        model.load_state_dict(torch.load(params.weights, map_location=device))
     else:
         raise ValueError(f"Model weight not found at {params.weights}")
     model.to(device)

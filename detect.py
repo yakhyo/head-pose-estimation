@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', date
 def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='Head pose estimation inference.')
-    parser.add_argument("--arch", type=str, default="resnet18", help="Model name, default `resnet18`")
+    parser.add_argument("--network", type=str, default="resnet18", help="Model name, default `resnet18`")
     parser.add_argument(
         "--input",
         type=str,
@@ -78,7 +78,7 @@ def main(params):
         logging.info(f"Exception occured while loading pre-trained weights of face detection model. Exception: {e}")
 
     try:
-        head_pose = get_model(params.arch, num_classes=6, pretrained=False)
+        head_pose = get_model(params.network, num_classes=6, pretrained=False)
         state_dict = torch.load(params.weights, map_location=device)
         head_pose.load_state_dict(state_dict)
         logging.info("Head Pose Estimation model weights loaded.")

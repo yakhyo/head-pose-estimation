@@ -14,8 +14,8 @@ This project focuses on head pose estimation using various deep learning models,
 
 | Date       | Feature Description                                                                                                                                                                   |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| -          | 🔄 **Updated Pre-trained Models**: New weights for existing **ResNet (18, 34, 50)** and **MobileNet (v2, v3)** backbones, offering improved accuracy and efficiency.                  |
-| -          | 🚀 **Multi-GPU Training Support**: Enabled distributed training across multiple GPUs for faster model training and improved scalability.                                              |
+| 2024-12-16 | 🔄 **Updated Pre-trained Models**: New weights for existing **ResNet (18, 34, 50)** and **MobileNet (v2, v3)** backbones, offering improved accuracy and efficiency.                  |
+| 2024-12-16 | 🚀 **Multi-GPU Training Support**: Enabled distributed training across multiple GPUs for faster model training and improved scalability.                                              |
 | 2024-08-31 | 🧠 **Face Detection Integration**: [Sample and Computation Redistribution](https://arxiv.org/abs/2105.04714) employed for efficient inference and processing in face detection tasks. |
 | 2024-08-31 | 🔄 **Pre-trained Models**: Support for **ResNet (18, 34, 50)** and **MobileNet (v2, v3)** backbones for feature extraction and optimized performance across diverse applications.     |
 | 2024-08-31 | 🎯 **Head Pose Estimation**: Enhanced model architecture for precise head pose estimation, utilizing pre-trained backbones for robust and efficient performance.                      |

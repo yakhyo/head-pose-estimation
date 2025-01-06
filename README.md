@@ -22,14 +22,14 @@ This project focuses on head pose estimation using various deep learning models,
 
 ## Evaluation results on AFLW2000
 
-| Model              | Size    | Best Epochs | Yaw        | Pitch      | Roll       | MAE        |
-| ------------------ | ------- | ----------- | ---------- | ---------- | ---------- | ---------- |
-| ResNet-18          | 43 MB   | 53          | 4.5027     | 5.8261     | 4.2188     | 4.8492     |
-| ResNet-34          | 81.6 MB | 73          | 4.4538     | 5.2690     | 3.8855     | 4.5361     |
-| ResNet-50          | 91.3 MB | 77          | **3.5529** | **4.9962** | **3.4986** | **4.0159** |
-| MobileNet V2       | 9.59 MB | 73          | 5.6880     | 6.0391     | 4.4433     | 5.3901     |
-| MobileNet V3 small | 6 MB    | 17          | 8.6926     | 7.7089     | 6.0035     | 7.4683     |
-| MobileNet V3 large | 17 MB   | 71          | 5.6068     | 6.6022     | 4.9959     | 5.7350     |
+| Model              | Size    | Yaw        | Pitch      | Roll       | MAE        |
+| ------------------ | ------- | ---------- | ---------- | ---------- | ---------- |
+| ResNet-18          | 43 MB   | 4.5027     | 5.8261     | 4.2188     | 4.8492     |
+| ResNet-34          | 81.6 MB | 4.4538     | 5.2690     | 3.8855     | 4.5361     |
+| ResNet-50          | 91.3 MB | 3.5529     | 4.9962     | 3.4986     | 4.0159     |
+| MobileNet V2       | 9.59 MB | 5.6880     | 6.0391     | 4.4433     | 5.3901     |
+| MobileNet V3 small | 6 MB    | 8.6926     | 7.7089     | 6.0035     | 7.4683     |
+| MobileNet V3 large | 17 MB   | 5.6068     | 6.6022     | 4.9959     | 5.7350     |
 
 ## Installation
 

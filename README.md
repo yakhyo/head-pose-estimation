@@ -176,7 +176,7 @@ options:
 ### Inference
 
 ```bash
-detect.py --input assets/in_video.mp4 --weights weights/resnet18.pt --arch resnet18 --output output.mp4
+detect.py --input assets/in_video.mp4 --weights weights/resnet18.pt --network resnet18 --output output.mp4
 ```
 
 `detect.py` arguments:

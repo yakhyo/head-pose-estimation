@@ -1,12 +1,9 @@
 # Head Pose Estimation: Lightweight Head Pose Estimation using MobileNet and ResNets
 
-![Downloads](https://img.shields.io/github/downloads/yakhyo/head-pose-estimation/total)
+![Downloads](https://img.shields.io/github/downloads/yakhyo/head-pose-estimation/total?label=Downloads&color=blue)
 [![GitHub Repo stars](https://img.shields.io/github/stars/yakhyo/head-pose-estimation)](https://github.com/yakhyo/head-pose-estimation/stargazers)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/yakhyo/head-pose-estimation)
 
-<!--
-<h5 align="center"> If you like our project, please give us a star ⭐ on GitHub for the latest updates.</h5>
--->
 
 <video controls autoplay loop src="https://github.com/user-attachments/assets/307262d3-8fa0-4084-be6c-29ee1a3903ef" muted="false" width="100%"></video>
 <video controls autoplay loop src="https://github.com/user-attachments/assets/50f010cf-6fcf-46b0-87cc-53065cba3fe7" muted="false" width="100%"></video>
@@ -54,26 +51,36 @@ pip install -r requirements.txt
 
    a) Download weights from the following links (Trained on 300W-LP and evaluated on AFLW200 dataset):
 
+   **PyTorch Weights**
+
 | Model              | Weights                                                                                                              | Size    |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------- | ------- |
-| ResNet-18          | [resnet18.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet18.pt)                   | 42.7 MB |
-| ResNet-34          | [resnet34.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet34.pt)                   | 81.3 MB |
-| ResNet-50          | [resnet50.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/resnet50.pt)                   | 90 MB   |
-| MobileNet V2       | [mobilenetv2.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv2.pt)             | 8.74 MB |
-| MobileNet V3 small | [mobilenetv3_small.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv3_small.pt) | 5.93 MB |
-| MobileNet V3 large | [mobilenetv3_large.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/v0.0.1/mobilenetv3_large.pt) | 16.2 MB |
+| ResNet-18          | [resnet18.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/resnet18.pt)                   | 42.7 MB |
+| ResNet-34          | [resnet34.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/resnet34.pt)                   | 81.3 MB |
+| ResNet-50          | [resnet50.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/resnet50.pt)                   | 90 MB   |
+| MobileNet V2       | [mobilenetv2.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/mobilenetv2.pt)             | 8.74 MB |
+| MobileNet V3 small | [mobilenetv3_small.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/mobilenetv3_small.pt) | 5.93 MB |
+| MobileNet V3 large | [mobilenetv3_large.pt](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/mobilenetv3_large.pt) | 16.2 MB |
 
-b) Run the command below to download weights to the `weights` directory (Linux):
+   **ONNX Weights**
+
+| Model              | Weights                                                                                                                    | Size    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------- |
+| ResNet-18          | [resnet18.onnx](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/resnet18.onnx)                    | 43 MB   |
+| ResNet-34          | [resnet34.onnx](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/resnet34.onnx)                    | 81 MB   |
+| ResNet-50          | [resnet50.onnx](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/resnet50.onnx)                    | 90 MB   |
+| MobileNet V2       | [mobilenetv2.onnx](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/mobilenetv2.onnx)              | 8.5 MB  |
+| MobileNet V3 small | [mobilenetv3_small.onnx](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/mobilenetv3_small.onnx)  | 5.8 MB  |
+| MobileNet V3 large | [mobilenetv3_large.onnx](https://github.com/yakhyo/head-pose-estimation/releases/download/weights/mobilenetv3_large.onnx)  | 16 MB   |
+
+   b) Run the command below to download weights to the `weights` directory (Linux):
 
 ```bash
-sh download.sh [model_name]
-            resnet18
-            resnet34
-            resnet50
-            mobilenetv2
-            mobilenetv3_small
-            mobilenetv3_large
+sh download.sh resnet18
+sh download.sh mobilenetv2
 ```
+
+Each command downloads both `.pt` and `.onnx` weights. Available models: `resnet18`, `resnet34`, `resnet50`, `mobilenetv2`, `mobilenetv3_small`, `mobilenetv3_large`
 
 ## Usage
 
@@ -177,10 +184,10 @@ options:
   --weights WEIGHTS     Path to model weight for evaluation.
 ```
 
-### Inference
+### Inference (PyTorch)
 
 ```bash
-detect.py --input assets/in_video.mp4 --weights weights/resnet18.pt --network resnet18 --output output.mp4
+python detect.py --input assets/in_video.mp4 --weights weights/resnet18.pt --network resnet18 --output output.mp4
 ```
 
 `detect.py` arguments:
@@ -199,6 +206,56 @@ options:
                         Draw cube or axis for head pose
   --weights WEIGHTS     Path to head pose estimation model weights
   --output OUTPUT       Path to save output file
+```
+
+### ONNX Export
+
+Export a PyTorch model to ONNX format:
+
+```bash
+python onnx_export.py -w weights/resnet18.pt -n resnet18
+python onnx_export.py -w weights/mobilenetv2.pt -n mobilenetv2 --dynamic
+```
+
+`onnx_export.py` arguments:
+
+```
+usage: onnx_export.py [-h] [-w WEIGHT] [-n {resnet18,resnet34,resnet50,mobilenetv2,mobilenetv3_small,mobilenetv3_large}] [--dynamic]
+
+Head Pose Estimation Model ONNX Export
+
+options:
+  -h, --help            show this help message and exit
+  -w, --weight WEIGHT   Trained state_dict file path to open
+  -n, --network         Backbone network architecture to use
+  --dynamic             Enable dynamic batch size for ONNX export
+```
+
+### Inference (ONNX)
+
+Run inference using the ONNX model (no PyTorch dependency required):
+
+```bash
+python onnx_inference.py --source 0 --model weights/resnet18.onnx
+python onnx_inference.py --source assets/in_video.mp4 --model weights/resnet18.onnx --output output.mp4
+python onnx_inference.py --source assets/in_video.mp4 --model weights/resnet18.onnx --draw-type axis
+```
+
+`onnx_inference.py` arguments:
+
+```
+usage: onnx_inference.py [-h] --source SOURCE --model MODEL [--detector DETECTOR] [--draw-type {cube,axis}] [--output OUTPUT]
+
+Head Pose Estimation ONNX Inference
+
+options:
+  -h, --help            show this help message and exit
+  --source SOURCE       Video path or camera index (e.g., 0 for webcam)
+  --model MODEL         Path to head pose ONNX model
+  --detector DETECTOR   Path to SCRFD face detector (default: ./weights/det_10g.onnx)
+  --draw-type {cube,axis}
+                        Draw cube or axis for head pose
+  --output OUTPUT       Path to save output video (optional)
 ```
 
 ## Reference

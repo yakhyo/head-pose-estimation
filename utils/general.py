@@ -326,6 +326,9 @@ def draw_cube(image: np.ndarray, yaw: float, pitch: float, roll: float, bbox: Li
     """
     Plots a 3D pose cube on a given image based on yaw, pitch, and roll angles.
 
+    All 8 vertices are computed symmetrically around the bounding box center
+    so the cube stays centered on the face at any rotation.
+
     Args:
         image (np.array): The input image where the cube will be drawn.
         yaw (float): The yaw angle in degrees.
@@ -334,72 +337,56 @@ def draw_cube(image: np.ndarray, yaw: float, pitch: float, roll: float, bbox: Li
         bbox (List[int]): Bounding box coordinates as [x_min, y_min, x_max, y_max].
         size (float, optional): Size of the cube. Defaults to 150.
     """
-    # Convert angles from degrees to radians
-    yaw, pitch, roll = np.radians([-yaw, pitch, roll])
+    yaw_r, pitch_r, roll_r = np.radians([-yaw, pitch, roll])
 
-    # Bounding box calculations
     x_min, y_min, x_max, y_max = bbox
-    tdx = int(x_min + (x_max - x_min) * 0.5)
-    tdy = int(y_min + (y_max - y_min) * 0.5)
+    cx = (x_min + x_max) * 0.5
+    cy = (y_min + y_max) * 0.5
+    h = size * 0.5
 
-    # Calculate cube's face coordinates
-    face_x = tdx - 0.5 * size
-    face_y = tdy - 0.5 * size
+    cos_y, sin_y = np.cos(yaw_r), np.sin(yaw_r)
+    cos_p, sin_p = np.cos(pitch_r), np.sin(pitch_r)
+    cos_r, sin_r = np.cos(roll_r), np.sin(roll_r)
 
-    # Pre-compute trigonometric values
-    cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
-    cos_pitch, sin_pitch = np.cos(pitch), np.sin(pitch)
-    cos_roll, sin_roll = np.cos(roll), np.sin(roll)
+    ex = np.array([cos_y * cos_r, cos_p * sin_r + cos_r * sin_p * sin_y])
+    ey = np.array([-cos_y * sin_r, cos_p * cos_r - sin_p * sin_y * sin_r])
+    ez = np.array([sin_y, -cos_y * sin_p])
 
-    # Calculate cube's edge points
-    x1 = int(size * (cos_yaw * cos_roll) + face_x)
-    y1 = int(size * (cos_pitch * sin_roll + cos_roll * sin_pitch * sin_yaw) + face_y)
-    x2 = int(size * (-cos_yaw * sin_roll) + face_x)
-    y2 = int(size * (cos_pitch * cos_roll - sin_pitch * sin_yaw * sin_roll) + face_y)
-    x3 = int(size * sin_yaw + face_x)
-    y3 = int(size * (-cos_yaw * sin_pitch) + face_y)
+    center = np.array([cx, cy])
 
-    # Convert coordinates to integers
-    face_x, face_y = int(face_x), int(face_y)
+    def _pt(v: np.ndarray) -> tuple:
+        return (int(v[0]), int(v[1]))
 
-    # Define cube lines' color and thickness
+    f0 = center + h * (-ex - ey - ez)
+    f1 = center + h * (+ex - ey - ez)
+    f2 = center + h * (+ex + ey - ez)
+    f3 = center + h * (-ex + ey - ez)
+    b0 = center + h * (-ex - ey + ez)
+    b1 = center + h * (+ex - ey + ez)
+    b2 = center + h * (+ex + ey + ez)
+    b3 = center + h * (-ex + ey + ez)
+
     red = (0, 0, 255)
-    blue = (255, 0, 0)
     green = (0, 255, 0)
+    blue = (255, 0, 0)
 
-    # Draw cube edges
-    cv2.line(image, (face_x, face_y), (x1, y1), color=red, thickness=2)
-    cv2.line(image, (face_x, face_y), (x2, y2), color=red, thickness=2)
-    cv2.line(image, (x2, y2), (x2 + x1 - face_x, y2 + y1 - face_y), color=red, thickness=2)
-    cv2.line(image, (x1, y1), (x1 + x2 - face_x, y1 + y2 - face_y), color=red, thickness=2)
+    # Front face at head (red)
+    cv2.line(image, _pt(f0), _pt(f1), red, 2)
+    cv2.line(image, _pt(f1), _pt(f2), red, 2)
+    cv2.line(image, _pt(f2), _pt(f3), red, 2)
+    cv2.line(image, _pt(f3), _pt(f0), red, 2)
 
-    cv2.line(image, (face_x, face_y), (x3, y3), (255, 0, 0), 2)
-    cv2.line(image, (x1, y1), (x1 + x3 - face_x, y1 + y3 - face_y), color=blue, thickness=2)
-    cv2.line(image, (x2, y2), (x2 + x3 - face_x, y2 + y3 - face_y), color=blue, thickness=2)
-    cv2.line(
-        image,
-        (x2 + x1 - face_x, y2 + y1 - face_y),
-        (x3 + x1 + x2 - 2 * face_x, y3 + y2 + y1 - 2 * face_y),
-        color=blue,
-        thickness=2
-    )
+    # Back face in looking direction (green)
+    cv2.line(image, _pt(b0), _pt(b1), green, 2)
+    cv2.line(image, _pt(b1), _pt(b2), green, 2)
+    cv2.line(image, _pt(b2), _pt(b3), green, 2)
+    cv2.line(image, _pt(b3), _pt(b0), green, 2)
 
-    cv2.line(
-        image,
-        (x3 + x1 - face_x, y3 + y1 - face_y),
-        (x3 + x1 + x2 - 2 * face_x, y3 + y2 + y1 - 2 * face_y),
-        color=green,
-        thickness=2
-    )
-    cv2.line(
-        image,
-        (x2 + x3 - face_x, y2 + y3 - face_y),
-        (x3 + x1 + x2 - 2 * face_x, y3 + y2 + y1 - 2 * face_y),
-        color=green,
-        thickness=2
-    )
-    cv2.line(image, (x3, y3), (x3 + x1 - face_x, y3 + y1 - face_y), color=green, thickness=2)
-    cv2.line(image, (x3, y3), (x3 + x2 - face_x, y3 + y2 - face_y), color=green, thickness=2)
+    # Side edges (blue)
+    cv2.line(image, _pt(f0), _pt(b0), blue, 2)
+    cv2.line(image, _pt(f1), _pt(b1), blue, 2)
+    cv2.line(image, _pt(f2), _pt(b2), blue, 2)
+    cv2.line(image, _pt(f3), _pt(b3), blue, 2)
 
 
 def draw_axis(image: np.ndarray, yaw: float, pitch: float, roll: float, bbox: List[int], size_ratio: float = 0.5) -> None:

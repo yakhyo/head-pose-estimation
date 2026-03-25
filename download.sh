@@ -9,20 +9,20 @@ mkdir -p weights
 # Check if a model name was provided
 if [ -z "$1" ]; then
     echo "Usage: $0 <model_name>"
+    echo "  model_name: resnet18, resnet34, resnet50, mobilenetv2, mobilenetv3_small, mobilenetv3_large"
     echo "Example: $0 resnet18"
     exit 1
 fi
 
-# Determine the model name
 MODEL_NAME=$1
-MODEL_FILE="${MODEL_NAME}.pt"
 
-# Download the model
-wget -O weights/$MODEL_FILE $BASE_URL/$MODEL_FILE
-
-# Check if the download was successful
-if [ $? -eq 0 ]; then
-    echo "Downloaded $MODEL_FILE to weights/"
-else
-    echo "Failed to download $MODEL_FILE"
-fi
+for EXT in pt onnx; do
+    MODEL_FILE="${MODEL_NAME}.${EXT}"
+    echo "Downloading $MODEL_FILE ..."
+    wget -q -O weights/$MODEL_FILE $BASE_URL/$MODEL_FILE
+    if [ $? -eq 0 ]; then
+        echo "Downloaded $MODEL_FILE to weights/"
+    else
+        echo "Failed to download $MODEL_FILE"
+    fi
+done

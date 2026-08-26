@@ -1,3 +1,5 @@
+
+
 # Head Pose Estimation: Lightweight Head Pose Estimation using MobileNet and ResNets
 
 ![Downloads](https://img.shields.io/github/downloads/yakhyo/head-pose-estimation/total?label=Downloads&color=blue)
@@ -37,7 +39,7 @@ This project focuses on head pose estimation using various deep learning models,
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yakyo/head-pose-estimation.git
+git clone https://github.com/yakhyo/head-pose-estimation.git
 cd head-pose-estimation
 ```
 

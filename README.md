@@ -6,6 +6,10 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/yakhyo/head-pose-estimation)](https://github.com/yakhyo/head-pose-estimation/stargazers)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/yakhyo/head-pose-estimation)
 
+> [!TIP]
+> The models and functionality in this repository are **integrated into [UniFace](https://github.com/yakhyo/uniface)** — an all-in-one face analysis library.<br>
+> [![PyPI Version](https://img.shields.io/pypi/v/uniface.svg)](https://pypi.org/project/uniface/) [![GitHub Stars](https://img.shields.io/github/stars/yakhyo/uniface)](https://github.com/yakhyo/uniface/stargazers)
+
 
 <video controls autoplay loop src="https://github.com/user-attachments/assets/307262d3-8fa0-4084-be6c-29ee1a3903ef" muted="false" width="100%"></video>
 <video controls autoplay loop src="https://github.com/user-attachments/assets/50f010cf-6fcf-46b0-87cc-53065cba3fe7" muted="false" width="100%"></video>
